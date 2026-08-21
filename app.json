@@ -1,0 +1,73 @@
+{
+  "expo": {
+    "name": "Fasty24 Expert",
+    "slug": "fasty24-expert",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "fasty24expert",
+    "splash": {
+      "backgroundColor": "#0D0D0D"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.fasty24.expert"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#FFC400"
+      },
+      "package": "com.fasty24.expert",
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-location",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Fasty24 Expert to access your photos for KYC documents.",
+          "cameraPermission": "Allow Fasty24 Expert to take photos for KYC and arrival verification."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35
+          }
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#FFC400",
+          "sounds": [
+            "./assets/sounds/job_alert.wav"
+          ]
+        }
+      ],
+      "expo-font",
+      "expo-asset"
+    ],
+    "extra": {
+      "apiUrl": "https://api.fasty24.com/api/v1",
+      "socketUrl": "https://api.fasty24.com",
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "abbb0711-4377-4b61-95b6-11335d0c942a"
+      }
+    },
+    "owner": "fasty24"
+  }
+}
