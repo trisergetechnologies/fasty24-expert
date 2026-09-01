@@ -31,6 +31,8 @@ import {
 import type { BookingDetail, AvailableAddon, Estimate } from '../../lib/api';
 import { normalizeBookingDetail, mergeBookingDetail, formatInr, formatDateTime } from '../../lib/booking';
 import { subscribeBooking, subscribeBookingEvents } from '../../lib/socket';
+import { pauseForegroundJobTracking, startJobLocationTracking, stopJobLocationTracking } from '../../lib/jobTracking';
+import { pickImage } from '../../lib/pickImage';
 import StatusBadge from '../../components/StatusBadge';
 import OtpModal from '../../components/OtpModal';
 import JobTimer from '../../components/JobTimer';
@@ -39,7 +41,6 @@ import GradientButton from '../../components/GradientButton';
 import EstimateCard from '../../components/EstimateCard';
 import PaymentSheet from '../../components/PaymentSheet';
 import { colors, spacing, radius, shadows, common, gradients } from '../../constants/theme';
-import * as ImagePicker from 'expo-image-picker';
 
 const EN_ROUTE_STATUSES = new Set(['pending', 'confirmed', 'dispatched']);
 const ARRIVAL_STATUSES = new Set(['travelling']);
@@ -59,6 +60,7 @@ export default function JobDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [otpMode, setOtpMode] = useState<'start' | 'complete' | null>(null);
+  const [otpError, setOtpError] = useState<string | null>(null);
   const [addonModalVisible, setAddonModalVisible] = useState(false);
   const [addons, setAddons] = useState<AvailableAddon[]>([]);
   const [addonsLoading, setAddonsLoading] = useState(false);
@@ -122,6 +124,25 @@ export default function JobDetailScreen() {
     if (effectiveStartedAt) startedAtRef.current = effectiveStartedAt;
   }, [effectiveStartedAt]);
 
+  useEffect(() => {
+    if (!id || !booking) return undefined;
+    const raw = booking.backendStatus || '';
+    const shouldTrack =
+      raw === 'assigned' ||
+      raw === 'travelling' ||
+      booking.status === 'confirmed' ||
+      booking.status === 'travelling' ||
+      booking.status === 'dispatched';
+    if (!shouldTrack) {
+      void stopJobLocationTracking();
+      return undefined;
+    }
+    void startJobLocationTracking(id);
+    return () => {
+      void pauseForegroundJobTracking();
+    };
+  }, [id, booking?.status, booking?.backendStatus]);
+
   async function handleMarkEnRoute() {
     if (!id) return;
     setActionLoading(true);
@@ -139,22 +160,11 @@ export default function JobDetailScreen() {
     if (!id) return;
     setActionLoading(true);
     try {
-      const permission = await ImagePicker.requestCameraPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert('Camera required', 'Allow camera access to capture your arrival selfie.');
+      const picked = await pickImage({ mode: 'camera', cameraType: 'front' });
+      if (!('uri' in picked)) {
         return;
       }
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        cameraType: ImagePicker.CameraType.front,
-        allowsEditing: false,
-        quality: 0.7,
-      });
-      if (result.canceled || !result.assets?.[0]?.uri) {
-        Alert.alert('Selfie required', 'Capture a live selfie before marking arrived.');
-        return;
-      }
-      const uploaded = await uploadImage(result.assets[0].uri);
+      const uploaded = await uploadImage(picked.uri);
       const raw = await markArrived(id, uploaded.url);
       setBooking(normalizeBookingDetail(raw as any));
     } catch (err: any) {
@@ -168,6 +178,7 @@ export default function JobDetailScreen() {
     if (!id || !otpMode) return;
     const mode = otpMode;
     setActionLoading(true);
+    setOtpError(null);
     try {
       const raw = mode === 'start' ? await startJob(id, otp) : await completeJob(id, otp);
       const updated = normalizeBookingDetail(raw as any);
@@ -188,10 +199,7 @@ export default function JobDetailScreen() {
         setCompletionInfo({ earning: updated.expertEarning, durationLabel });
       }
     } catch (err: any) {
-      Alert.alert(
-        mode === 'start' ? 'Could not start job' : 'Could not complete job',
-        err?.message ?? 'Please check the code and try again.',
-      );
+      setOtpError(err?.message ?? 'Please check the code and try again.');
     } finally {
       setActionLoading(false);
     }
@@ -205,17 +213,9 @@ export default function JobDetailScreen() {
   async function handleAddProof(estimateId: string, lineId: string) {
     setProofBusyLineId(lineId);
     try {
-      const permission = await ImagePicker.requestCameraPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert('Camera required', 'Allow camera access to photograph the installed part.');
-        return;
-      }
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 0.7,
-      });
-      if (result.canceled || !result.assets?.[0]?.uri) return;
-      const uploaded = await uploadImage(result.assets[0].uri);
+      const picked = await pickImage({ mode: 'camera' });
+      if (!('uri' in picked)) return;
+      const uploaded = await uploadImage(picked.uri);
       const updated = await addLineProof(estimateId, lineId, uploaded.url);
       setEstimates((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
     } catch (err: any) {
@@ -527,7 +527,11 @@ export default function JobDetailScreen() {
         }
         confirmLabel={otpMode === 'start' ? 'Start' : 'Complete'}
         loading={actionLoading}
-        onClose={() => setOtpMode(null)}
+        error={otpError}
+        onClose={() => {
+          setOtpMode(null);
+          setOtpError(null);
+        }}
         onSubmit={handleOtpSubmit}
       />
 

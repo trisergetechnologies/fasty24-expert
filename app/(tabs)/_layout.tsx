@@ -1,5 +1,10 @@
-import { Tabs } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, View } from 'react-native';
+import { Tabs, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getMe } from '../../lib/api';
+import { requestHomePermissions } from '../../lib/permissions';
 import { colors } from '../../constants/theme';
 
 type IconName = keyof typeof Ionicons.glyphMap;
@@ -25,6 +30,40 @@ function TabIcon({
 }
 
 export default function TabsLayout() {
+  const insets = useSafeAreaInsets();
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const expert = await getMe();
+        if (cancelled) return;
+        if (expert.kycStatus !== 'verified') {
+          router.replace('/onboarding');
+          return;
+        }
+        setReady(true);
+        void requestHomePermissions();
+      } catch {
+        if (!cancelled) router.replace('/login');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!ready) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.light }}>
+        <ActivityIndicator size="large" color={colors.yellow} />
+      </View>
+    );
+  }
+
+  const bottomPad = Math.max(8, insets.bottom);
+
   return (
     <Tabs
       screenOptions={{
@@ -32,8 +71,8 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: colors.black,
           borderTopWidth: 0,
-          height: 64,
-          paddingBottom: 8,
+          height: 56 + bottomPad,
+          paddingBottom: bottomPad,
           paddingTop: 6,
         },
         tabBarActiveTintColor: colors.yellow,

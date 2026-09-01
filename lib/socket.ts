@@ -36,8 +36,8 @@ export function disconnectSocket() {
 
 // ─── Expert: emit location ────────────────────────────────────────────────────
 
-export function emitLocation(lat: number, lng: number) {
-  socket?.emit('expert:location', { lat, lng });
+export function emitLocation(lat: number, lng: number, bookingId?: string) {
+  socket?.emit('expert:location', bookingId ? { lat, lng, bookingId } : { lat, lng });
 }
 
 // ─── Subscribe to incoming dispatch offer ─────────────────────────────────────

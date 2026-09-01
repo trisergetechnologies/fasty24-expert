@@ -5,31 +5,57 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "fasty24expert",
+    "icon": "./assets/icon.png",
     "splash": {
-      "backgroundColor": "#0D0D0D"
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF"
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.fasty24.expert"
+      "bundleIdentifier": "com.fasty24.expert",
+      "infoPlist": {
+        "UIBackgroundModes": ["location", "remote-notification", "audio"],
+        "NSCameraUsageDescription": "Fasty24 Expert needs the camera for KYC documents and arrival photos.",
+        "NSPhotoLibraryUsageDescription": "Fasty24 Expert needs photo access to upload KYC documents."
+      }
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#FFC400"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
       },
       "package": "com.fasty24.expert",
-      "versionCode": 1,
+      "googleServicesFile": "./google-services.json",
+      "versionCode": 7,
       "permissions": [
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "android.permission.VIBRATE",
         "android.permission.POST_NOTIFICATIONS",
+        "android.permission.USE_FULL_SCREEN_INTENT",
+        "android.permission.SYSTEM_ALERT_WINDOW",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
         "android.permission.RECORD_AUDIO"
       ]
     },
     "plugins": [
       "expo-router",
-      "expo-location",
+      "./plugins/withJobOfferFullScreenIntent",
+      [
+        "expo-location",
+        {
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true,
+          "locationAlwaysAndWhenInUsePermission": "Fasty24 Expert shares your location with the customer while you are on the way to a job."
+        }
+      ],
       [
         "expo-image-picker",
         {
@@ -52,11 +78,14 @@
           "color": "#FFC400",
           "sounds": [
             "./assets/sounds/job_alert.wav"
-          ]
+          ],
+          "enableBackgroundRemoteNotifications": true
         }
       ],
       "expo-font",
-      "expo-asset"
+      "expo-asset",
+      "expo-av",
+      "expo-task-manager"
     ],
     "extra": {
       "apiUrl": "https://api.fasty24.com/api/v1",

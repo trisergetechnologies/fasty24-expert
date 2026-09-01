@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "273620783983",
+    "project_id": "fasty24",
+    "storage_bucket": "fasty24.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:273620783983:android:b4e22757e353a7ac560e9a",
+        "android_client_info": {
+          "package_name": "com.fasty24.expert"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCXVwu6TTYO0qGi7DwlDQkZMGgK8YtICEA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

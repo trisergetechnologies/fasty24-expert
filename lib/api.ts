@@ -8,11 +8,14 @@ const BASE =
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+export type ExpertGender = 'male' | 'female' | 'other' | 'prefer_not_to_say' | '';
+
 export interface Expert {
   id: string;
   name: string;
   phone: string;
   email?: string;
+  gender?: ExpertGender;
   bio?: string;
   photoUrl?: string;
   rating: number;
@@ -25,6 +28,8 @@ export interface Expert {
   kycSubmittedAt?: string | null;
   trainingStatus: 'pending' | 'not_started' | 'in_progress' | 'completed';
   skills: string[];
+  enrolledCategories?: string[];
+  excludedServiceIds?: string[];
   specialization?: string;
   documents?: {
     aadhaarNumber?: string;
@@ -43,7 +48,13 @@ export interface Expert {
 }
 
 export interface OnboardingPayload {
+  name?: string;
+  email?: string;
+  gender?: ExpertGender;
   specialization: string;
+  skills?: string[];
+  enrolledCategories?: string[];
+  excludedServiceIds?: string[];
   documents: {
     aadhaarNumber: string;
     aadhaarFrontUrl: string;
@@ -300,7 +311,14 @@ export function getMe() {
   return request<Expert>('/expert/me');
 }
 
-export function updateMe(data: Partial<Pick<Expert, 'name' | 'email' | 'bio' | 'photoUrl' | 'skills'>>) {
+export function updateMe(
+  data: Partial<
+    Pick<
+      Expert,
+      'name' | 'email' | 'gender' | 'bio' | 'photoUrl' | 'skills' | 'enrolledCategories' | 'excludedServiceIds'
+    >
+  >,
+) {
   return request<Expert>('/expert/me', { method: 'PATCH', body: JSON.stringify(data) });
 }
 
@@ -311,18 +329,14 @@ export function submitOnboarding(payload: OnboardingPayload) {
   });
 }
 
-/** @deprecated Prefer submitOnboarding */
-export function submitKyc(note?: string) {
-  return request<{ kycStatus: string }>('/expert/kyc', { method: 'POST', body: JSON.stringify({ note }) });
-}
-
 export async function uploadImage(uri: string): Promise<{ url: string; publicId?: string }> {
   const token = await getToken();
-  const name = uri.split('/').pop() || `photo-${Date.now()}.jpg`;
-  const match = /\.(\w+)$/.exec(name);
-  const type = match ? `image/${match[1]}` : 'image/jpeg';
   const form = new FormData();
-  form.append('file', { uri, name, type } as any);
+  form.append('file', {
+    uri,
+    name: `photo-${Date.now()}.jpg`,
+    type: 'image/jpeg',
+  } as any);
 
   const res = await fetch(`${BASE}/expert/uploads`, {
     method: 'POST',
@@ -372,8 +386,16 @@ export function getEarnings(period: 'today' | 'week') {
 
 // ─── Offer ────────────────────────────────────────────────────────────────────
 
-export function getPendingOffer() {
-  return request<Offer | null>('/expert/pending-offer');
+export async function getPendingOffers() {
+  const raw = await request<Offer | Offer[] | null>('/expert/pending-offer');
+  if (!raw) return [] as Offer[];
+  return Array.isArray(raw) ? raw : [raw];
+}
+
+/** @deprecated Use getPendingOffers — the API returns a list. */
+export async function getPendingOffer() {
+  const list = await getPendingOffers();
+  return list[0] ?? null;
 }
 
 export function respondToOffer(bookingId: string, accepted: boolean) {
@@ -511,4 +533,44 @@ export function getEstimatePaymentStatus(estimateId: string) {
     settled: boolean;
     amount: number;
   }>(`/estimates/${estimateId}/payment/status`);
+}
+
+// ─── App version / force update ───────────────────────────────────────────────
+
+export interface AppVersionConfig {
+  app: 'expert' | 'customer';
+  minVersionCode: number;
+  latestVersion: string;
+  latestVersionCode: number;
+  androidPackage: string;
+  storeUrl: string;
+  forceUpdate: boolean;
+  title: string;
+  message: string;
+}
+
+export function getAppConfig(app: 'expert' | 'customer' = 'expert') {
+  return request<AppVersionConfig>(`/app-config?app=${app}`, {}, false);
+}
+
+export interface CatalogService {
+  id: string;
+  slug: string;
+  name: string;
+  skillTag: string;
+  serviceKind?: string;
+  categories?: string[];
+}
+
+export interface CatalogCategory {
+  id: string;
+  slug: string;
+  name: string;
+  icon?: string;
+  imageUrl?: string;
+  services: CatalogService[];
+}
+
+export function getCatalog() {
+  return request<CatalogCategory[]>('/categories', {}, false);
 }

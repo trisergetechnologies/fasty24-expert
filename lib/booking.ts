@@ -1,24 +1,15 @@
 import type { BookingDetail, BookingStatus, BookingSummary, Offer } from './api';
 
-const COMMISSION_RATE = 0.75;
-
 type RawBooking = Record<string, any>;
 
-function estimateExpertEarning(raw: RawBooking): number {
-  if (typeof raw.expertEarning === 'number' && Number.isFinite(raw.expertEarning)) {
-    return raw.expertEarning;
-  }
-  const subtotal = raw.pricing?.subtotal;
-  if (typeof subtotal === 'number' && Number.isFinite(subtotal)) {
-    return Math.round(subtotal * COMMISSION_RATE);
-  }
-  if (typeof raw.total === 'number' && Number.isFinite(raw.total)) {
-    return Math.round(raw.total * COMMISSION_RATE);
-  }
-  if (typeof raw.totalAmount === 'number' && Number.isFinite(raw.totalAmount)) {
-    return Math.round(raw.totalAmount * COMMISSION_RATE);
-  }
-  return 0;
+function toNumber(value: unknown, fallback = 0): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function resolveExpertEarning(raw: RawBooking): number {
+  return toNumber(raw.expertEarning, 0);
 }
 
 function resolveTotalAmount(raw: RawBooking): number {
@@ -88,7 +79,7 @@ export function normalizeBookingSummary(raw: RawBooking): BookingSummary {
     scheduledAt: resolveScheduledAt(raw),
     status: mapBookingStatus(raw),
     totalAmount: resolveTotalAmount(raw),
-    expertEarning: estimateExpertEarning(raw),
+    expertEarning: resolveExpertEarning(raw),
   };
 }
 
@@ -131,31 +122,26 @@ export function normalizeBookingDetail(raw: RawBooking): BookingDetail {
 
 export function normalizeOffer(raw: RawBooking | null | undefined): Offer | null {
   if (!raw) return null;
+  const bookingId = String(raw.bookingId || raw.id || '');
+  if (!bookingId) return null;
   const summary = normalizeBookingSummary(raw);
   return {
-    bookingId: summary.id,
+    bookingId,
     serviceName: summary.serviceName,
-    customerDistance:
-      typeof raw.customerDistance === 'number'
-        ? raw.customerDistance
-        : typeof raw.distanceKm === 'number'
-          ? raw.distanceKm
-          : 0,
-    eta:
-      typeof raw.eta === 'number'
-        ? raw.eta
-        : typeof raw.etaMin === 'number'
-          ? Math.round(raw.etaMin)
-          : 0,
-    totalAmount: summary.totalAmount,
-    expertEarning: summary.expertEarning,
+    customerDistance: toNumber(raw.customerDistance ?? raw.distanceKm, 0),
+    eta: Math.round(toNumber(raw.eta ?? raw.etaMin, 0)),
+    totalAmount: toNumber(raw.totalAmount ?? raw.total, summary.totalAmount),
+    expertEarning: resolveExpertEarning(raw) || summary.expertEarning,
     address: String(raw.address || raw.location?.address || raw.pickupLocation?.address || ''),
-    offerExpiresInSec:
-      typeof raw.offerExpiresInSec === 'number' && raw.offerExpiresInSec > 0
-        ? raw.offerExpiresInSec
-        : 60,
+    offerExpiresInSec: Math.max(1, toNumber(raw.offerExpiresInSec, 60)),
     scheduledAt: summary.scheduledAt,
   };
+}
+
+export function normalizeOffers(raw: unknown): Offer[] {
+  if (!raw) return [];
+  const list = Array.isArray(raw) ? raw : [raw];
+  return list.map((item) => normalizeOffer(item as RawBooking)).filter((o): o is Offer => !!o);
 }
 
 export function formatInr(amount: number | null | undefined): string {

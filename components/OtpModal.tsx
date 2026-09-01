@@ -18,6 +18,7 @@ interface Props {
   subtitle?: string;
   confirmLabel?: string;
   loading?: boolean;
+  error?: string | null;
   onClose: () => void;
   onSubmit: (otp: string) => void;
 }
@@ -30,6 +31,7 @@ export default function OtpModal({
   subtitle,
   confirmLabel = 'Confirm',
   loading = false,
+  error = null,
   onClose,
   onSubmit,
 }: Props) {
@@ -52,7 +54,7 @@ export default function OtpModal({
           {!!subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
 
           <TextInput
-            style={styles.input}
+            style={[styles.input, !!error && styles.inputError]}
             value={otp}
             onChangeText={(v) => setOtp(v.replace(/[^0-9]/g, '').slice(0, OTP_LENGTH))}
             keyboardType="number-pad"
@@ -62,6 +64,7 @@ export default function OtpModal({
             autoFocus
             textAlign="center"
           />
+          {!!error && <Text style={styles.errorText}>{error}</Text>}
 
           <View style={styles.actions}>
             <TouchableOpacity style={styles.cancelBtn} onPress={onClose} disabled={loading}>
@@ -117,7 +120,17 @@ const styles = StyleSheet.create({
     letterSpacing: 12,
     color: colors.black,
     backgroundColor: colors.light,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  inputError: {
+    borderColor: colors.error,
+  },
+  errorText: {
+    color: colors.error,
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: spacing.md,
   },
   actions: {
     flexDirection: 'row',

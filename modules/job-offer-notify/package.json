@@ -1,0 +1,6 @@
+{
+  "name": "job-offer-notify",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "description": "Posts a call-style full-screen incoming-job notification on Android."
+}

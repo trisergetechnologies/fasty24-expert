@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,14 +13,11 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
-import { getDashboard, getMe, getPendingOffer } from '../../lib/api';
-import type { DashboardData, Expert, Offer } from '../../lib/api';
-import { connectSocket, onOffer } from '../../lib/socket';
-import { presentForegroundJobAlert } from '../../lib/push';
-import { normalizeOffer, formatInr, formatDateTime } from '../../lib/booking';
+import { getDashboard, getMe } from '../../lib/api';
+import type { DashboardData, Expert } from '../../lib/api';
+import { formatInr, formatDateTime, normalizeBookingSummary } from '../../lib/booking';
 import OnlineToggle from '../../components/OnlineToggle';
 import StatusBadge from '../../components/StatusBadge';
-import OfferCard from '../../components/OfferCard';
 import { colors, spacing, radius, shadows, common, gradients } from '../../constants/theme';
 
 export default function HomeScreen() {
@@ -29,13 +26,6 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [offer, setOffer] = useState<Offer | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const offerRef = useRef<Offer | null>(null);
-
-  useEffect(() => {
-    offerRef.current = offer;
-  }, [offer]);
 
   async function load() {
     try {
@@ -51,62 +41,11 @@ export default function HomeScreen() {
     }
   }
 
-  // Realtime offers via socket; slow poll only as fallback when online
-  useEffect(() => {
-    let cancelled = false;
-    let unsubOffer: (() => void) | undefined;
-
-    (async () => {
-      await connectSocket();
-      if (cancelled) return;
-
-      unsubOffer = onOffer((o) => {
-        const normalized = normalizeOffer(o);
-        setOffer(normalized);
-        presentForegroundJobAlert(normalized?.bookingId);
-      });
-    })();
-
-    return () => {
-      cancelled = true;
-      unsubOffer?.();
-    };
-  }, []);
-
   useFocusEffect(
     useCallback(() => {
       load();
-
-      async function checkPendingOffer() {
-        if (offerRef.current) return;
-        try {
-          const pending = await getPendingOffer();
-          const normalized = normalizeOffer(pending);
-          if (normalized) {
-            setOffer((prev) => prev ?? normalized);
-          }
-        } catch {
-          // ignore
-        }
-      }
-
-      checkPendingOffer();
-
-      if (pollRef.current) clearInterval(pollRef.current);
-      pollRef.current = setInterval(checkPendingOffer, 30_000);
-
-      return () => {
-        if (pollRef.current) {
-          clearInterval(pollRef.current);
-          pollRef.current = null;
-        }
-      };
     }, []),
   );
-
-  function onOfferResponded() {
-    setOffer(null);
-  }
 
   if (loading) {
     return (
@@ -134,12 +73,6 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={common.screen} edges={['top']}>
       <StatusBar style="dark" />
-      {offer && (
-        <OfferCard
-          offer={offer}
-          onResponded={onOfferResponded}
-        />
-      )}
       <ScrollView
         contentContainerStyle={styles.scroll}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} colors={[colors.yellow]} tintColor={colors.yellow} />}
@@ -161,7 +94,10 @@ export default function HomeScreen() {
         </View>
 
         {/* Online toggle */}
-        <OnlineToggle initialOnline={expert?.isOnline ?? false} />
+        <OnlineToggle
+          initialOnline={!!(expert?.isOnline || expert?.status === 'online' || expert?.status === 'on_job')}
+          kycStatus={expert?.kycStatus}
+        />
 
         {/* Stats row */}
         <View style={styles.statsRow}>
@@ -183,25 +119,28 @@ export default function HomeScreen() {
             <Text style={styles.emptyText}>No recent orders</Text>
           </View>
         ) : (
-          data.recentOrders.map((order) => (
+          data.recentOrders.map((order) => {
+            const item = normalizeBookingSummary(order as any);
+            return (
             <TouchableOpacity
-              key={order.id}
+              key={item.id}
               style={[common.card, styles.orderCard]}
-              onPress={() => router.push(`/job/${order.id}`)}
+              onPress={() => router.push(`/job/${item.id}`)}
             >
               <View style={common.between}>
                 <Text style={styles.orderService} numberOfLines={1}>
-                  {order.serviceName}
+                  {item.serviceName}
                 </Text>
-                <StatusBadge status={order.status} />
+                <StatusBadge status={item.status} />
               </View>
-              <Text style={styles.orderCustomer}>{order.customerName}</Text>
+              <Text style={styles.orderCustomer}>{item.customerName}</Text>
               <View style={[common.between, { marginTop: spacing.xs }]}>
-                <Text style={styles.orderDate}>{formatDateTime(order.scheduledAt)}</Text>
-                <Text style={styles.orderAmount}>₹{formatInr(order.expertEarning)}</Text>
+                <Text style={styles.orderDate}>{formatDateTime(item.scheduledAt)}</Text>
+                <Text style={styles.orderAmount}>₹{formatInr(item.expertEarning)}</Text>
               </View>
             </TouchableOpacity>
-          ))
+            );
+          })
         )}
       </ScrollView>
     </SafeAreaView>

@@ -8,26 +8,37 @@ import {
   Alert,
 } from 'react-native';
 import { router } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { respondToOffer, type Offer } from '../lib/api';
 import { formatInr, formatDateTime } from '../lib/booking';
+import { stopJobBuzzer } from '../lib/jobAlert';
 import { colors, spacing, radius, shadows, gradients } from '../constants/theme';
 
 interface Props {
   offer: Offer;
   onResponded: () => void;
+  fullscreen?: boolean;
 }
 
-export default function OfferCard({ offer, onResponded }: Props) {
+export default function OfferCard({ offer, onResponded, fullscreen = false }: Props) {
   const [secondsLeft, setSecondsLeft] = useState(
     Math.max(1, Math.floor(offer.offerExpiresInSec || 60)),
   );
-  const [busy, setBusy] = useState(false);
+  const [accepting, setAccepting] = useState(false);
+  const [declining, setDeclining] = useState(false);
+  const [expired, setExpired] = useState(false);
   const expiredRef = useRef(false);
+
+  const busy = accepting || declining;
 
   useEffect(() => {
     setSecondsLeft(Math.max(1, Math.floor(offer.offerExpiresInSec || 60)));
     expiredRef.current = false;
+    setExpired(false);
+    setAccepting(false);
+    setDeclining(false);
   }, [offer.bookingId, offer.offerExpiresInSec]);
 
   useEffect(() => {
@@ -40,12 +51,15 @@ export default function OfferCard({ offer, onResponded }: Props) {
   useEffect(() => {
     if (secondsLeft > 0 || expiredRef.current) return;
     expiredRef.current = true;
+    setExpired(true);
+    void stopJobBuzzer();
     onResponded();
   }, [secondsLeft, onResponded]);
 
   async function respond(accepted: boolean) {
     if (busy || expiredRef.current) return;
-    setBusy(true);
+    if (accepted) setAccepting(true);
+    else setDeclining(true);
     try {
       await respondToOffer(offer.bookingId, accepted);
       onResponded();
@@ -58,51 +72,59 @@ export default function OfferCard({ offer, onResponded }: Props) {
         err?.message ?? 'Please try again.',
       );
     } finally {
-      setBusy(false);
+      setAccepting(false);
+      setDeclining(false);
     }
   }
 
   const distanceLabel =
-    typeof offer.customerDistance === 'number'
+    typeof offer.customerDistance === 'number' && offer.customerDistance > 0
       ? `${offer.customerDistance.toFixed(1)} km`
       : '—';
   const etaLabel = offer.eta > 0 ? `${offer.eta} min` : '—';
   const urgency = secondsLeft <= 10;
 
-  return (
-    <View style={styles.overlay}>
-      <View style={styles.card}>
-        <View style={styles.topRow}>
-          <Text style={styles.badge}>NEW JOB</Text>
-          <View style={[styles.timerChip, urgency && styles.timerChipUrgent]}>
-            <Text style={[styles.timerText, urgency && styles.timerTextUrgent]}>
-              {secondsLeft}s
-            </Text>
-          </View>
+  const inner = (
+    <View style={[styles.card, fullscreen && styles.cardFull]}>
+      <View style={styles.topRow}>
+        <Text style={styles.badge}>{expired ? 'EXPIRED' : 'NEW JOB'}</Text>
+        <View style={[styles.timerChip, (urgency || expired) && styles.timerChipUrgent]}>
+          <Text style={[styles.timerText, (urgency || expired) && styles.timerTextUrgent]}>
+            {expired ? '0s' : `${secondsLeft}s`}
+          </Text>
         </View>
+      </View>
 
-        <Text style={styles.service} numberOfLines={2}>
-          {offer.serviceName || 'Service request'}
+      <Text style={[styles.service, fullscreen && styles.serviceFull]} numberOfLines={3}>
+        {offer.serviceName || 'Service request'}
+      </Text>
+
+      {!!offer.address && (
+        <Text style={styles.address} numberOfLines={3}>
+          {offer.address}
         </Text>
+      )}
 
-        {!!offer.address && (
-          <Text style={styles.address} numberOfLines={2}>
-            {offer.address}
-          </Text>
-        )}
+      <View style={styles.metaRow}>
+        <Meta label="Distance" value={distanceLabel} />
+        <Meta label="ETA" value={etaLabel} />
+        <Meta label="Earn" value={`₹${formatInr(offer.expertEarning)}`} highlight />
+      </View>
 
-        <View style={styles.metaRow}>
-          <Meta label="Distance" value={distanceLabel} />
-          <Meta label="ETA" value={etaLabel} />
-          <Meta label="Earn" value={`₹${formatInr(offer.expertEarning)}`} highlight />
+      {!!offer.scheduledAt && (
+        <Text style={styles.scheduled}>
+          Scheduled · {formatDateTime(offer.scheduledAt)}
+        </Text>
+      )}
+
+      {expired ? (
+        <View style={styles.expiredBox}>
+          <Text style={styles.expiredText}>Offer expired</Text>
+          <TouchableOpacity style={styles.dismissBtn} onPress={onResponded} activeOpacity={0.85}>
+            <Text style={styles.dismissText}>Dismiss</Text>
+          </TouchableOpacity>
         </View>
-
-        {!!offer.scheduledAt && (
-          <Text style={styles.scheduled}>
-            Scheduled · {formatDateTime(offer.scheduledAt)}
-          </Text>
-        )}
-
+      ) : (
         <View style={styles.actions}>
           <TouchableOpacity
             style={[styles.btn, styles.decline]}
@@ -110,7 +132,7 @@ export default function OfferCard({ offer, onResponded }: Props) {
             disabled={busy}
             activeOpacity={0.85}
           >
-            {busy ? (
+            {declining ? (
               <ActivityIndicator color={colors.white} />
             ) : (
               <Text style={styles.declineText}>Decline</Text>
@@ -123,7 +145,7 @@ export default function OfferCard({ offer, onResponded }: Props) {
             style={styles.acceptWrap}
           >
             <LinearGradient colors={gradients.primary} style={[styles.btn, styles.accept]}>
-              {busy ? (
+              {accepting ? (
                 <ActivityIndicator color={colors.black} />
               ) : (
                 <Text style={styles.acceptText}>Accept</Text>
@@ -131,7 +153,20 @@ export default function OfferCard({ offer, onResponded }: Props) {
             </LinearGradient>
           </TouchableOpacity>
         </View>
-      </View>
+      )}
+    </View>
+  );
+
+  if (!fullscreen) {
+    return <View style={styles.overlay}>{inner}</View>;
+  }
+
+  return (
+    <View style={styles.fullRoot}>
+      <StatusBar style="light" />
+      <SafeAreaView style={styles.fullSafe} edges={['top', 'bottom']}>
+        {inner}
+      </SafeAreaView>
     </View>
   );
 }
@@ -163,6 +198,15 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     paddingTop: spacing.sm,
   },
+  fullRoot: {
+    flex: 1,
+    backgroundColor: colors.black,
+  },
+  fullSafe: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: spacing.lg,
+  },
   card: {
     backgroundColor: colors.black,
     borderRadius: radius.lg,
@@ -170,6 +214,9 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.yellow,
     ...shadows.dark,
+  },
+  cardFull: {
+    padding: spacing.lg,
   },
   topRow: {
     flexDirection: 'row',
@@ -189,7 +236,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   timerChip: {
-    backgroundColor: '#222',
+    backgroundColor: colors.darkSurfaceAlt,
     borderRadius: radius.sm,
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -211,8 +258,12 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     marginBottom: spacing.xs,
   },
+  serviceFull: {
+    fontSize: 28,
+    marginTop: spacing.sm,
+  },
   address: {
-    color: '#aaa',
+    color: colors.darkMuted,
     fontSize: 13,
     marginBottom: spacing.md,
   },
@@ -223,13 +274,13 @@ const styles = StyleSheet.create({
   },
   metaItem: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: colors.darkSurface,
     borderRadius: radius.md,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.sm,
   },
   metaLabel: {
-    color: '#888',
+    color: colors.muted,
     fontSize: 11,
     fontWeight: '600',
     marginBottom: 2,
@@ -243,7 +294,7 @@ const styles = StyleSheet.create({
     color: colors.yellow,
   },
   scheduled: {
-    color: '#888',
+    color: colors.muted,
     fontSize: 12,
     marginBottom: spacing.sm,
   },
@@ -258,12 +309,12 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 48,
+    minHeight: 52,
   },
   decline: {
-    backgroundColor: '#2a2a2a',
+    backgroundColor: colors.darkSurfaceAlt,
     borderWidth: 1,
-    borderColor: '#444',
+    borderColor: colors.darkBorder,
   },
   acceptWrap: {
     flex: 1,
@@ -277,6 +328,29 @@ const styles = StyleSheet.create({
   acceptText: {
     color: colors.black,
     fontWeight: '900',
+    fontSize: 15,
+  },
+  expiredBox: {
+    marginTop: spacing.md,
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  expiredText: {
+    color: colors.error,
+    fontWeight: '800',
+    fontSize: 16,
+  },
+  dismissBtn: {
+    backgroundColor: colors.darkSurfaceAlt,
+    borderRadius: radius.md,
+    paddingVertical: 14,
+    paddingHorizontal: spacing.xl,
+    minWidth: 160,
+    alignItems: 'center',
+  },
+  dismissText: {
+    color: colors.white,
+    fontWeight: '800',
     fontSize: 15,
   },
 });

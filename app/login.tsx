@@ -9,6 +9,7 @@ import {
   Platform,
   ScrollView,
   Alert,
+  Linking,
 } from 'react-native';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -17,6 +18,8 @@ import { requestOtp, verifyOtp } from '../lib/api';
 import { setToken, setUser } from '../lib/storage';
 import { connectSocket } from '../lib/socket';
 import { registerForPushNotifications } from '../lib/push';
+import { resumeOfferSession } from '../lib/offerBridge';
+import { PARTNER_PRIVACY_URL, PARTNER_TERMS_URL } from '../lib/legal';
 import GradientButton from '../components/GradientButton';
 import { colors, spacing, radius, shadows, common, gradients } from '../constants/theme';
 
@@ -45,7 +48,7 @@ export default function LoginScreen() {
   }
 
   async function handleVerifyOtp() {
-    if (otp.trim().length < 4) {
+    if (otp.trim().length !== 6) {
       Alert.alert('Invalid OTP', 'Please enter the 6-digit OTP sent to your phone.');
       return;
     }
@@ -57,6 +60,7 @@ export default function LoginScreen() {
       if (expert) await setUser(expert);
       await connectSocket();
       registerForPushNotifications();
+      resumeOfferSession();
       if (res.needsOnboarding || expert?.kycStatus !== 'verified') {
         router.replace('/onboarding');
       } else {
@@ -117,7 +121,7 @@ export default function LoginScreen() {
                 placeholderTextColor={colors.muted}
                 keyboardType="number-pad"
                 value={otp}
-                onChangeText={setOtp}
+                onChangeText={(v) => setOtp(v.replace(/[^0-9]/g, '').slice(0, 6))}
                 maxLength={6}
                 returnKeyType="done"
                 onSubmitEditing={handleVerifyOtp}
@@ -135,6 +139,18 @@ export default function LoginScreen() {
             </>
           )}
         </View>
+
+        <Text style={styles.legal}>
+          By continuing, you agree to our{' '}
+          <Text style={styles.legalLink} onPress={() => Linking.openURL(PARTNER_TERMS_URL)}>
+            Partner Terms
+          </Text>
+          {' '}and{' '}
+          <Text style={styles.legalLink} onPress={() => Linking.openURL(PARTNER_PRIVACY_URL)}>
+            Privacy Policy
+          </Text>
+          .
+        </Text>
 
         <Text style={styles.footer}>
           For service professionals only.{'\n'}Download the customer app to book services.
@@ -227,5 +243,17 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 12,
     lineHeight: 18,
+  },
+  legal: {
+    textAlign: 'center',
+    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: spacing.md,
+  },
+  legalLink: {
+    color: colors.yellow,
+    fontWeight: '700',
+    textDecorationLine: 'underline',
   },
 });

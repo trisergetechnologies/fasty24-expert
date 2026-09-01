@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,47 +9,51 @@ import {
 } from 'react-native';
 import * as Location from 'expo-location';
 import { goOnline, goOffline } from '../lib/api';
-import { emitLocation } from '../lib/socket';
+import { startOnlinePresence, stopOnlinePresence } from '../lib/presence';
+import { registerForPushNotifications, requestNotificationPermission } from '../lib/push';
 import { colors, spacing, radius } from '../constants/theme';
 
 interface Props {
   initialOnline?: boolean;
+  kycStatus?: string;
   onStatusChange?: (online: boolean) => void;
 }
 
-export default function OnlineToggle({ initialOnline = false, onStatusChange }: Props) {
+export default function OnlineToggle({
+  initialOnline = false,
+  kycStatus,
+  onStatusChange,
+}: Props) {
   const [isOnline, setIsOnline] = useState(initialOnline);
   const [loading, setLoading] = useState(false);
-  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    return () => {
-      if (heartbeatRef.current) clearInterval(heartbeatRef.current);
-    };
-  }, []);
-
-  async function startHeartbeat() {
-    const sendLocation = async () => {
-      try {
-        const { coords } = await Location.getCurrentPositionAsync({});
-        emitLocation(coords.latitude, coords.longitude);
-      } catch {}
-    };
-    await sendLocation();
-    heartbeatRef.current = setInterval(sendLocation, 15_000);
-  }
-
-  function stopHeartbeat() {
-    if (heartbeatRef.current) {
-      clearInterval(heartbeatRef.current);
-      heartbeatRef.current = null;
-    }
-  }
+    setIsOnline(initialOnline);
+    if (initialOnline) void startOnlinePresence();
+  }, [initialOnline]);
 
   async function toggle(value: boolean) {
+    if (value && kycStatus && kycStatus !== 'verified') {
+      Alert.alert(
+        'KYC required',
+        'Complete onboarding and wait for admin approval before going online.',
+      );
+      return;
+    }
     setLoading(true);
     try {
       if (value) {
+        const notifyOk = await requestNotificationPermission();
+        if (!notifyOk) {
+          Alert.alert(
+            'Notifications required',
+            'Allow notifications so you hear new job offers even when the app is in the background.',
+          );
+          setLoading(false);
+          return;
+        }
+        await registerForPushNotifications();
+
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
           Alert.alert(
@@ -61,9 +65,9 @@ export default function OnlineToggle({ initialOnline = false, onStatusChange }: 
         }
         const { coords } = await Location.getCurrentPositionAsync({});
         await goOnline(coords.latitude, coords.longitude);
-        await startHeartbeat();
+        await startOnlinePresence();
       } else {
-        stopHeartbeat();
+        await stopOnlinePresence();
         await goOffline();
       }
       setIsOnline(value);
@@ -78,7 +82,7 @@ export default function OnlineToggle({ initialOnline = false, onStatusChange }: 
   return (
     <View style={[styles.container, isOnline ? styles.online : styles.offline]}>
       <View style={styles.left}>
-        <View style={[styles.dot, isOnline ? styles.dotGreen : styles.dotGray]} />
+        <View style={[styles.dot, isOnline ? styles.dotOnline : styles.dotOffline]} />
         <View>
           <Text style={[styles.label, !isOnline && styles.labelOffline]}>
             {isOnline ? 'You are Online' : 'You are Offline'}
@@ -131,11 +135,11 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     marginRight: spacing.xs,
   },
-  dotGreen: {
-    backgroundColor: '#0D0D0D',
+  dotOnline: {
+    backgroundColor: colors.black,
   },
-  dotGray: {
-    backgroundColor: '#555',
+  dotOffline: {
+    backgroundColor: colors.tabInactive,
   },
   label: {
     fontWeight: '800',
@@ -147,7 +151,7 @@ const styles = StyleSheet.create({
   },
   sub: {
     fontSize: 12,
-    color: '#555',
+    color: colors.darkSurfaceAlt,
     marginTop: 1,
   },
   subOffline: {

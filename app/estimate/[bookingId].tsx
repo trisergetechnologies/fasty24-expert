@@ -13,8 +13,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
 import GradientButton from '../../components/GradientButton';
+import { pickImage } from '../../lib/pickImage';
 import PartPicker from '../../components/PartPicker';
 import {
   createEstimate,
@@ -117,19 +117,11 @@ export default function EstimateBuilderScreen() {
   }
 
   async function addDiagnosisPhoto() {
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert('Camera required', 'Allow camera access to photograph the fault.');
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.7,
-    });
-    if (result.canceled || !result.assets?.[0]?.uri) return;
+    const picked = await pickImage({ mode: 'camera' });
+    if (!('uri' in picked)) return;
     setUploading(true);
     try {
-      const uploaded = await uploadImage(result.assets[0].uri);
+      const uploaded = await uploadImage(picked.uri);
       setDiagnosisImages((prev) => [...prev, uploaded.url]);
     } catch (err) {
       Alert.alert('Upload failed', err instanceof ApiError ? err.message : 'Please try again.');

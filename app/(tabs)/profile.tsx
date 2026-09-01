@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   TextInput,
   Alert,
+  Linking,
 } from 'react-native';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -15,10 +16,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import { getMe, updateMe, submitTraining } from '../../lib/api';
-import type { Expert } from '../../lib/api';
+import { getMe, updateMe, submitTraining, getCatalog } from '../../lib/api';
+import type { CatalogCategory, Expert, ExpertGender } from '../../lib/api';
 import { clearAll } from '../../lib/storage';
 import { disconnectSocket } from '../../lib/socket';
+import { DELETE_ACCOUNT_URL, PARTNER_PRIVACY_URL, PARTNER_TERMS_URL } from '../../lib/legal';
+import GradientButton from '../../components/GradientButton';
+import TradePicker, { EMAIL_RE, GENDER_OPTIONS, inferEnrolledFromSkills } from '../../components/TradePicker';
+import { clearAll } from '../../lib/storage';
+import { disconnectSocket } from '../../lib/socket';
+import { DELETE_ACCOUNT_URL, PARTNER_PRIVACY_URL, PARTNER_TERMS_URL } from '../../lib/legal';
 import GradientButton from '../../components/GradientButton';
 import { colors, spacing, radius, shadows, common, gradients } from '../../constants/theme';
 
@@ -46,21 +53,32 @@ export default function ProfileScreen() {
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [gender, setGender] = useState<ExpertGender>('');
   const [bio, setBio] = useState('');
-  const [skillsInput, setSkillsInput] = useState('');
+  const [catalog, setCatalog] = useState<CatalogCategory[]>([]);
+  const [enrolled, setEnrolled] = useState<string[]>([]);
+  const [excluded, setExcluded] = useState<string[]>([]);
 
-  function fillForm(e: Expert) {
+  function fillForm(e: Expert, cats: CatalogCategory[] = catalog) {
     setName(e.name ?? '');
     setEmail(e.email ?? '');
+    setGender(e.gender ?? '');
     setBio(e.bio ?? '');
-    setSkillsInput((e.skills ?? []).join(', '));
+    if (e.enrolledCategories?.length) {
+      setEnrolled(e.enrolledCategories);
+      setExcluded(e.excludedServiceIds || []);
+    } else {
+      setEnrolled(inferEnrolledFromSkills(cats, e.skills ?? []));
+      setExcluded([]);
+    }
   }
 
   const load = useCallback(async () => {
     try {
-      const e = await getMe();
+      const [e, cats] = await Promise.all([getMe(), getCatalog().catch(() => [] as CatalogCategory[])]);
+      setCatalog(cats);
       setExpert(e);
-      fillForm(e);
+      fillForm(e, cats);
       setError(null);
     } catch (err: any) {
       setError(err?.message ?? 'Could not load your profile.');
@@ -76,13 +94,28 @@ export default function ProfileScreen() {
   );
 
   async function handleSave() {
+    if (!EMAIL_RE.test(email.trim())) {
+      Alert.alert('Check email', 'Enter a valid email address.');
+      return;
+    }
+    if (!gender) {
+      Alert.alert('Gender required', 'Select your gender.');
+      return;
+    }
+    if (!enrolled.length) {
+      Alert.alert('Select your work', 'Choose at least one category so we can send matching jobs.');
+      return;
+    }
     setSaving(true);
     try {
-      const skills = skillsInput
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
-      const updated = await updateMe({ name: name.trim(), email: email.trim(), bio: bio.trim(), skills });
+      const updated = await updateMe({
+        name: name.trim(),
+        email: email.trim(),
+        gender,
+        bio: bio.trim(),
+        enrolledCategories: enrolled,
+        excludedServiceIds: excluded,
+      });
       setExpert(updated);
       fillForm(updated);
       setEditing(false);
@@ -210,6 +243,23 @@ export default function ProfileScreen() {
               autoCapitalize="none"
             />
 
+            <Text style={[styles.fieldLabel, { marginTop: spacing.md }]}>Gender</Text>
+            <View style={styles.chipRow}>
+              {GENDER_OPTIONS.map((opt) => {
+                const on = gender === opt.id;
+                return (
+                  <TouchableOpacity
+                    key={opt.id}
+                    style={[styles.chip, on && styles.chipOn]}
+                    onPress={() => setGender(opt.id)}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={[styles.chipText, on && styles.chipTextOn]}>{opt.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
             <Text style={[styles.fieldLabel, { marginTop: spacing.md }]}>Bio</Text>
             <TextInput
               style={[common.input, styles.multiline]}
@@ -220,12 +270,15 @@ export default function ProfileScreen() {
               numberOfLines={3}
             />
 
-            <Text style={[styles.fieldLabel, { marginTop: spacing.md }]}>Skills (comma-separated)</Text>
-            <TextInput
-              style={common.input}
-              value={skillsInput}
-              onChangeText={setSkillsInput}
-              placeholder="e.g. instant_maid, deep_clean"
+            <Text style={[styles.fieldLabel, { marginTop: spacing.md }]}>Work you take</Text>
+            <TradePicker
+              categories={catalog}
+              enrolled={enrolled}
+              excluded={excluded}
+              onChange={(nextEnrolled, nextExcluded) => {
+                setEnrolled(nextEnrolled);
+                setExcluded(nextExcluded);
+              }}
             />
 
             <View style={styles.editActions}>
@@ -244,13 +297,34 @@ export default function ProfileScreen() {
               </View>
             )}
 
-            {expert.skills?.length > 0 && (
+            {!!expert.email && (
               <View style={[common.card, styles.card]}>
-                <Text style={[common.sectionSub, { marginBottom: spacing.sm }]}>Skills</Text>
+                <Text style={common.sectionSub}>Email</Text>
+                <Text style={styles.bioText}>{expert.email}</Text>
+              </View>
+            )}
+
+            {!!expert.gender && (
+              <View style={[common.card, styles.card]}>
+                <Text style={common.sectionSub}>Gender</Text>
+                <Text style={styles.bioText}>
+                  {GENDER_OPTIONS.find((g) => g.id === expert.gender)?.label || expert.gender}
+                </Text>
+              </View>
+            )}
+
+            {(expert.enrolledCategories?.length || expert.skills?.length) > 0 && (
+              <View style={[common.card, styles.card]}>
+                <Text style={[common.sectionSub, { marginBottom: spacing.sm }]}>Work you take</Text>
                 <View style={styles.chipRow}>
-                  {expert.skills.map((skill) => (
-                    <View key={skill} style={styles.chip}>
-                      <Text style={styles.chipText}>{skill.replace(/_/g, ' ')}</Text>
+                  {(expert.enrolledCategories?.length
+                    ? expert.enrolledCategories.map(
+                        (slug) => catalog.find((c) => c.slug === slug)?.name || slug,
+                      )
+                    : expert.skills
+                  ).map((label) => (
+                    <View key={label} style={styles.chip}>
+                      <Text style={styles.chipText}>{String(label).replace(/_/g, ' ')}</Text>
                     </View>
                   ))}
                 </View>
@@ -309,6 +383,25 @@ export default function ProfileScreen() {
               style={styles.actionBtn}
             />
           )}
+        </View>
+
+        <View style={[common.card, styles.card]}>
+          <Text style={[common.sectionSub, { marginBottom: spacing.sm }]}>Legal</Text>
+          {[
+            { label: 'Partner Terms', url: PARTNER_TERMS_URL, icon: 'document-text-outline' as const },
+            { label: 'Privacy Policy', url: PARTNER_PRIVACY_URL, icon: 'lock-closed-outline' as const },
+            { label: 'Delete account', url: DELETE_ACCOUNT_URL, icon: 'trash-outline' as const },
+          ].map((item) => (
+            <TouchableOpacity
+              key={item.url}
+              style={styles.legalRow}
+              onPress={() => Linking.openURL(item.url)}
+            >
+              <Ionicons name={item.icon} size={18} color={colors.black} />
+              <Text style={styles.legalRowText}>{item.label}</Text>
+              <Ionicons name="open-outline" size={16} color={colors.gray} />
+            </TouchableOpacity>
+          ))}
         </View>
 
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
@@ -426,6 +519,13 @@ const styles = StyleSheet.create({
     color: colors.black,
     textTransform: 'capitalize',
   },
+  chipOn: {
+    backgroundColor: colors.yellow,
+    borderColor: colors.black,
+  },
+  chipTextOn: {
+    fontWeight: '800',
+  },
   fieldLabel: {
     fontSize: 13,
     fontWeight: '700',
@@ -464,6 +564,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.error,
     marginTop: spacing.sm,
+  },
+  legalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  legalRowText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.black,
   },
   logoutBtn: {
     flexDirection: 'row',
