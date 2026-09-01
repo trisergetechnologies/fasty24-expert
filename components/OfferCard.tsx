@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { respondToOffer, type Offer } from '../lib/api';
 import { formatInr, formatDateTime } from '../lib/booking';
 import { stopJobBuzzer } from '../lib/jobAlert';
+import { markOnJob } from '../lib/presence';
 import { colors, spacing, radius, shadows, gradients } from '../constants/theme';
 
 interface Props {
@@ -64,6 +65,7 @@ export default function OfferCard({ offer, onResponded, fullscreen = false }: Pr
       await respondToOffer(offer.bookingId, accepted);
       onResponded();
       if (accepted) {
+        markOnJob(offer.bookingId);
         router.push(`/job/${offer.bookingId}`);
       }
     } catch (err: any) {

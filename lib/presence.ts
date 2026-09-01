@@ -65,11 +65,6 @@ export async function startOnlinePresence(): Promise<void> {
   startOnlineHeartbeat();
 
   try {
-    const bg = await Location.requestBackgroundPermissionsAsync();
-    if (bg.status !== 'granted') {
-      mode = 'online';
-      return;
-    }
     await restartLocationService({
       title: 'You are online',
       body: 'Waiting for jobs — Fasty24 is sharing your location with dispatch.',
@@ -80,11 +75,16 @@ export async function startOnlinePresence(): Promise<void> {
   } catch {
     // Foreground watch still covers presence while the app is open.
   }
-  mode = 'online';
+  if (mode !== 'job') mode = 'online';
+}
+
+export function markOnJob(bookingId?: string): void {
+  if (bookingId) setTrackingBookingId(bookingId);
+  mode = 'job';
 }
 
 export async function startJobLocationTracking(bookingId: string): Promise<void> {
-  setTrackingBookingId(bookingId);
+  markOnJob(bookingId);
   const fg = await Location.requestForegroundPermissionsAsync();
   if (fg.status !== 'granted') return;
 
@@ -101,20 +101,16 @@ export async function startJobLocationTracking(bookingId: string): Promise<void>
   );
 
   try {
-    const bg = await Location.requestBackgroundPermissionsAsync();
-    if (bg.status === 'granted') {
-      await restartLocationService({
-        title: 'Sharing your location',
-        body: 'The customer can see your live location until you arrive.',
-        accuracy: Location.Accuracy.High,
-        timeInterval: 5000,
-        distanceInterval: 20,
-      });
-    }
+    await restartLocationService({
+      title: 'Sharing your location',
+      body: 'The customer can see your live location until you arrive.',
+      accuracy: Location.Accuracy.High,
+      timeInterval: 5000,
+      distanceInterval: 20,
+    });
   } catch {
-    // Background updates are optional; foreground watch still covers the job screen.
+    // In-app watch still covers the job screen if the foreground service cannot start.
   }
-  mode = 'job';
 }
 
 export async function stopJobLocationTracking(): Promise<void> {

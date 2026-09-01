@@ -9,19 +9,23 @@ import {
 } from 'react-native';
 import * as Location from 'expo-location';
 import { goOnline, goOffline } from '../lib/api';
-import { startOnlinePresence, stopOnlinePresence } from '../lib/presence';
+import { startOnlinePresence, stopOnlinePresence, startJobLocationTracking } from '../lib/presence';
 import { registerForPushNotifications, requestNotificationPermission } from '../lib/push';
 import { colors, spacing, radius } from '../constants/theme';
 
 interface Props {
   initialOnline?: boolean;
   kycStatus?: string;
+  jobLocked?: boolean;
+  activeBookingId?: string | null;
   onStatusChange?: (online: boolean) => void;
 }
 
 export default function OnlineToggle({
   initialOnline = false,
   kycStatus,
+  jobLocked = false,
+  activeBookingId,
   onStatusChange,
 }: Props) {
   const [isOnline, setIsOnline] = useState(initialOnline);
@@ -29,10 +33,21 @@ export default function OnlineToggle({
 
   useEffect(() => {
     setIsOnline(initialOnline);
-    if (initialOnline) void startOnlinePresence();
-  }, [initialOnline]);
+    if (jobLocked && activeBookingId) {
+      void startJobLocationTracking(activeBookingId);
+    } else if (initialOnline) {
+      void startOnlinePresence();
+    }
+  }, [initialOnline, jobLocked, activeBookingId]);
 
   async function toggle(value: boolean) {
+    if (!value && jobLocked) {
+      Alert.alert(
+        'Job in progress',
+        'Finish your current job before going offline.',
+      );
+      return;
+    }
     if (value && kycStatus && kycStatus !== 'verified') {
       Alert.alert(
         'KYC required',
@@ -88,7 +103,11 @@ export default function OnlineToggle({
             {isOnline ? 'You are Online' : 'You are Offline'}
           </Text>
           <Text style={[styles.sub, !isOnline && styles.subOffline]}>
-            {isOnline ? 'Ready to receive job requests' : 'Toggle to start accepting jobs'}
+            {jobLocked
+              ? 'On a job — finish it before going offline'
+              : isOnline
+                ? 'Ready to receive job requests'
+                : 'Toggle to start accepting jobs'}
           </Text>
         </View>
       </View>
@@ -98,6 +117,7 @@ export default function OnlineToggle({
         <Switch
           value={isOnline}
           onValueChange={toggle}
+          disabled={jobLocked}
           trackColor={{ false: colors.darkBorder, true: colors.yellow }}
           thumbColor={colors.white}
         />

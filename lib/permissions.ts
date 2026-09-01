@@ -101,10 +101,7 @@ export async function requestHomePermissions(): Promise<void> {
   await registerForPushNotifications();
 
   if (!asked) {
-    const fg = await Location.requestForegroundPermissionsAsync();
-    if (fg.status === 'granted') {
-      await Location.requestBackgroundPermissionsAsync();
-    }
+    await Location.requestForegroundPermissionsAsync();
   }
 
   if (Platform.OS === 'android' && !(await canUseFullScreenIntent())) {

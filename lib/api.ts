@@ -23,6 +23,7 @@ export interface Expert {
   completedJobs?: number;
   isOnline: boolean;
   status?: string;
+  activeBooking?: string | null;
   kycStatus: 'pending' | 'submitted' | 'verified' | 'rejected';
   kycNote?: string;
   kycSubmittedAt?: string | null;
@@ -398,11 +399,15 @@ export async function getPendingOffer() {
   return list[0] ?? null;
 }
 
-export function respondToOffer(bookingId: string, accepted: boolean) {
-  return request<{ status: string }>('/expert/offer/respond', {
+export async function respondToOffer(bookingId: string, accepted: boolean) {
+  const result = await request<{ ok?: boolean; status?: string }>('/expert/offer/respond', {
     method: 'POST',
     body: JSON.stringify({ bookingId, accepted }),
   });
+  if (accepted && result?.ok === false) {
+    throw new ApiError(409, 'This job is no longer available.');
+  }
+  return result;
 }
 
 // ─── Bookings ─────────────────────────────────────────────────────────────────

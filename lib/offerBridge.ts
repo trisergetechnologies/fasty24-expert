@@ -1,4 +1,5 @@
 import { respondToOffer, type Offer } from './api';
+import { markOnJob } from './presence';
 
 type IngestFn = (raw: unknown) => void;
 type RespondFn = (bookingId: string, accepted: boolean) => Promise<void>;
@@ -33,6 +34,7 @@ export async function respondIncomingOffer(bookingId: string, accepted: boolean)
     return;
   }
   await respondToOffer(bookingId, accepted);
+  if (accepted) markOnJob(bookingId);
 }
 
 export function clearIncomingOffer(bookingId?: string) {

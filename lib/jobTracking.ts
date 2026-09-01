@@ -3,4 +3,6 @@ export {
   stopJobLocationTracking,
   pauseForegroundJobTracking,
   isTrackingBooking,
+  markOnJob,
+  getPresenceMode,
 } from './presence';

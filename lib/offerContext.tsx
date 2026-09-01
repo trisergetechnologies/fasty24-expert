@@ -8,6 +8,7 @@ import { getToken } from './storage';
 import { startJobBuzzer, stopJobBuzzer } from './jobAlert';
 import { bindOfferBridge, bindResumeOffers } from './offerBridge';
 import { dismissJobOfferNotification, presentJobOfferNotification } from './push';
+import { getPresenceMode, markOnJob } from './presence';
 import OfferCard from '../components/OfferCard';
 
 interface OfferContextValue {
@@ -54,6 +55,7 @@ export function OfferProvider({ children }: { children: ReactNode }) {
 
   const ingestOffer = useCallback(
     (raw: unknown) => {
+      if (getPresenceMode() === 'job') return;
       const next = Array.isArray(raw) ? normalizeOffers(raw)[0] : normalizeOffer(raw as any);
       if (!next?.bookingId) return;
       const isNew = offerRef.current?.bookingId !== next.bookingId;
@@ -74,7 +76,10 @@ export function OfferProvider({ children }: { children: ReactNode }) {
     async (bookingId: string, accepted: boolean) => {
       await respondToOffer(bookingId, accepted);
       clearOffer(bookingId);
-      if (accepted) router.push(`/job/${bookingId}`);
+      if (accepted) {
+        markOnJob(bookingId);
+        router.push(`/job/${bookingId}`);
+      }
     },
     [clearOffer],
   );
@@ -90,6 +95,7 @@ export function OfferProvider({ children }: { children: ReactNode }) {
   const hydratePending = useCallback(async () => {
     const token = await getToken();
     if (!token) return;
+    if (getPresenceMode() === 'job') return;
     try {
       const pending = await getPendingOffers();
       if (pending[0]) ingestOffer(pending[0]);
