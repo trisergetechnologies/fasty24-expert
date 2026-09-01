@@ -23,10 +23,6 @@ import { disconnectSocket } from '../../lib/socket';
 import { DELETE_ACCOUNT_URL, PARTNER_PRIVACY_URL, PARTNER_TERMS_URL } from '../../lib/legal';
 import GradientButton from '../../components/GradientButton';
 import TradePicker, { EMAIL_RE, GENDER_OPTIONS, inferEnrolledFromSkills } from '../../components/TradePicker';
-import { clearAll } from '../../lib/storage';
-import { disconnectSocket } from '../../lib/socket';
-import { DELETE_ACCOUNT_URL, PARTNER_PRIVACY_URL, PARTNER_TERMS_URL } from '../../lib/legal';
-import GradientButton from '../../components/GradientButton';
 import { colors, spacing, radius, shadows, common, gradients } from '../../constants/theme';
 
 const KYC_LABELS: Record<Expert['kycStatus'], { label: string; bg: string; text: string }> = {
