@@ -27,6 +27,7 @@ import {
   uploadImage,
   listBookingEstimates,
   addLineProof,
+  requestBookingCall,
 } from '../../lib/api';
 import type { BookingDetail, AvailableAddon, Estimate } from '../../lib/api';
 import { normalizeBookingDetail, mergeBookingDetail, formatInr, formatDateTime } from '../../lib/booking';
@@ -69,6 +70,7 @@ export default function JobDetailScreen() {
   const [estimates, setEstimates] = useState<Estimate[]>([]);
   const [proofBusyLineId, setProofBusyLineId] = useState<string | null>(null);
   const [payingEstimate, setPayingEstimate] = useState<Estimate | null>(null);
+  const [calling, setCalling] = useState(false);
   const startedAtRef = useRef<string | null>(null);
 
   const load = useCallback(async () => {
@@ -260,9 +262,20 @@ export default function JobDetailScreen() {
     }
   }
 
-  function callCustomer() {
-    if (!booking?.customerPhone) return;
-    Linking.openURL(`tel:${booking.customerPhone}`);
+  async function callCustomer() {
+    if (!id || !booking?.canCall || calling) return;
+    setCalling(true);
+    try {
+      const res = await requestBookingCall(id);
+      Alert.alert(
+        'Calling…',
+        res.message || 'Answer your phone — we will connect you to the customer.',
+      );
+    } catch (err: any) {
+      Alert.alert('Could not call', err?.message ?? 'Please try again.');
+    } finally {
+      setCalling(false);
+    }
   }
 
   function openMaps() {
@@ -297,7 +310,12 @@ export default function JobDetailScreen() {
 
   if (!booking) return null;
 
-  const showEnRoute = EN_ROUTE_STATUSES.has(booking.status);
+  const windowStart = booking.scheduledSlot?.windowStart || booking.scheduledFor;
+  const scheduledTooEarly =
+    booking.bookingType === 'scheduled' &&
+    !!windowStart &&
+    Date.parse(String(windowStart)) - Date.now() > 30 * 60 * 1000;
+  const showEnRoute = EN_ROUTE_STATUSES.has(booking.status) && !scheduledTooEarly;
   const showArrive = ARRIVAL_STATUSES.has(booking.status);
   const showStart = booking.status === 'arrived' && !!booking.arrivalSelfie?.url;
   const showComplete = booking.status === 'in_progress';
@@ -369,6 +387,11 @@ export default function JobDetailScreen() {
         <View style={[common.card, styles.card]}>
           <Text style={styles.serviceName}>{booking.serviceName}</Text>
           <Text style={styles.scheduled}>{formatDateTime(booking.scheduledAt)}</Text>
+          {scheduledTooEarly ? (
+            <Text style={[styles.scheduled, { color: colors.yellow, marginTop: 6 }]}>
+              Starts later — you can head out from 30 minutes before the slot.
+            </Text>
+          ) : null}
 
           <View style={styles.divider} />
 
@@ -385,15 +408,25 @@ export default function JobDetailScreen() {
         <View style={[common.card, styles.card]}>
           <Text style={common.sectionSub}>Customer</Text>
           <View style={styles.rowBetween}>
-            <View>
+            <View style={{ flex: 1, paddingRight: 12 }}>
               <Text style={styles.customerName}>{booking.customerName}</Text>
-              <Text style={styles.customerPhone}>{booking.customerPhone || '—'}</Text>
+              <Text style={styles.customerPhone}>
+                {booking.canCall ? 'Call via Fasty24 (number hidden)' : 'Calling unavailable'}
+              </Text>
             </View>
-            {!!booking.customerPhone && (
-              <TouchableOpacity style={styles.callBtn} onPress={callCustomer}>
-                <Ionicons name="call" size={18} color={colors.black} />
+            {booking.canCall ? (
+              <TouchableOpacity
+                style={[styles.callBtn, calling && { opacity: 0.6 }]}
+                onPress={callCustomer}
+                disabled={calling}
+              >
+                {calling ? (
+                  <ActivityIndicator size="small" color={colors.black} />
+                ) : (
+                  <Ionicons name="call" size={18} color={colors.black} />
+                )}
               </TouchableOpacity>
-            )}
+            ) : null}
           </View>
         </View>
 

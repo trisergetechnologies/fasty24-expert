@@ -74,11 +74,12 @@ export function OfferProvider({ children }: { children: ReactNode }) {
 
   const respondFromNotification = useCallback(
     async (bookingId: string, accepted: boolean) => {
-      await respondToOffer(bookingId, accepted);
+      const result = await respondToOffer(bookingId, accepted);
       clearOffer(bookingId);
       if (accepted) {
-        markOnJob(bookingId);
-        router.push(`/job/${bookingId}`);
+        const scheduled = result?.goOnJob === false;
+        if (!scheduled) markOnJob(bookingId);
+        router.push(scheduled ? '/(tabs)/jobs' : `/job/${bookingId}`);
       }
     },
     [clearOffer],

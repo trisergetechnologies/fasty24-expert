@@ -27,6 +27,10 @@ export interface Expert {
   kycStatus: 'pending' | 'submitted' | 'verified' | 'rejected';
   kycNote?: string;
   kycSubmittedAt?: string | null;
+  /** null = legacy (no deposit gate). pending = must pay after KYC. */
+  joiningFeeStatus?: 'pending' | 'paid' | 'waived' | null;
+  joiningFeeAmount?: number;
+  joiningFeePaidAt?: string | null;
   trainingStatus: 'pending' | 'not_started' | 'in_progress' | 'completed';
   skills: string[];
   enrolledCategories?: string[];
@@ -110,6 +114,8 @@ export type BookingStatus =
 export interface BookingDetail extends BookingSummary {
   address: string;
   customerPhone: string;
+  /** When true, Call uses masked Exotel Connect (no real MSISDN in the payload). */
+  canCall?: boolean;
   sessionOtp?: { startCode: string; endCode: string };
   addOns: { serviceId: string; name: string; amount: number }[];
   paymentMethod: string;
@@ -123,6 +129,16 @@ export interface BookingDetail extends BookingSummary {
   distanceKm?: number | null;
   quotedEtaMin?: number | null;
   arrivalSelfie?: { url: string; capturedAt?: string | null } | null;
+  bookingType?: 'instant' | 'scheduled';
+  scheduledFor?: string | null;
+  scheduledSlot?: {
+    slotId?: string;
+    date?: string;
+    window?: string;
+    label?: string;
+    windowStart?: string;
+    windowEnd?: string;
+  } | null;
   /** Backend-tracked job clock, set once the expert starts the job. */
   jobTimer?: {
     durationMin?: number | null;
@@ -130,6 +146,8 @@ export interface BookingDetail extends BookingSummary {
     endsAt?: string | null;
     overtimeMin?: number | null;
   } | null;
+  categorySlugs?: string[];
+  serviceSlug?: string;
 }
 
 export interface AvailableAddon {
@@ -232,6 +250,7 @@ export interface Offer {
   address: string;
   offerExpiresInSec: number;
   scheduledAt?: string;
+  bookingType?: 'instant' | 'scheduled';
 }
 
 export class ApiError extends Error {
@@ -400,7 +419,7 @@ export async function getPendingOffer() {
 }
 
 export async function respondToOffer(bookingId: string, accepted: boolean) {
-  const result = await request<{ ok?: boolean; status?: string }>('/expert/offer/respond', {
+  const result = await request<{ ok?: boolean; status?: string; goOnJob?: boolean }>('/expert/offer/respond', {
     method: 'POST',
     body: JSON.stringify({ bookingId, accepted }),
   });
@@ -418,6 +437,14 @@ export function listBookings(scope: 'today' | 'history') {
 
 export function getBooking(id: string) {
   return request<BookingDetail>(`/bookings/${id}`);
+}
+
+/** Starts a masked Exotel Connect call (rings your phone first, then the customer). */
+export function requestBookingCall(id: string) {
+  return request<{ ok: boolean; callSid?: string; status?: string; message?: string }>(
+    `/bookings/${id}/call`,
+    { method: 'POST' },
+  );
 }
 
 export function markEnRoute(id: string) {
@@ -458,9 +485,10 @@ export function listAvailableAddons(id: string) {
 
 // ─── Parts catalog ────────────────────────────────────────────────────────────
 
-export function listParts(params: { category?: string; q?: string; kind?: string } = {}) {
+export function listParts(params: { category?: string; serviceId?: string; q?: string; kind?: string } = {}) {
   const qs = new URLSearchParams();
   if (params.category) qs.set('category', params.category);
+  if (params.serviceId) qs.set('serviceId', params.serviceId);
   if (params.q) qs.set('q', params.q);
   if (params.kind) qs.set('kind', params.kind);
   const suffix = qs.toString() ? `?${qs.toString()}` : '';
@@ -573,9 +601,91 @@ export interface CatalogCategory {
   name: string;
   icon?: string;
   imageUrl?: string;
+  joiningFee?: number;
+  providesMaterials?: boolean;
+  providedMaterialsNote?: string;
   services: CatalogService[];
 }
 
 export function getCatalog() {
   return request<CatalogCategory[]>('/categories', {}, false);
+}
+
+export interface JoiningFeeLine {
+  slug: string;
+  name: string;
+  joiningFee: number;
+  providesMaterials: boolean;
+  providedMaterialsNote: string;
+}
+
+export interface JoiningFeeQuote {
+  status: 'pending' | 'paid' | 'waived' | null;
+  amount: number;
+  totalAmount: number;
+  currency: string;
+  cleared: boolean;
+  paidAt?: string | null;
+  lines: JoiningFeeLine[];
+  materials: JoiningFeeLine[];
+  expert?: Expert;
+}
+
+export interface JoiningFeeOrder {
+  keyId: string;
+  orderId: string;
+  amount: number;
+  amountPaise: number;
+  currency: string;
+  name: string;
+  description: string;
+  prefill?: {
+    name?: string;
+    contact?: string;
+    email?: string;
+  };
+  waived?: boolean;
+  lines?: JoiningFeeLine[];
+  materials?: JoiningFeeLine[];
+  expert?: Expert;
+}
+
+export function getJoiningFee() {
+  return request<JoiningFeeQuote>('/expert/joining-fee');
+}
+
+export function createJoiningFeeOrder() {
+  return request<JoiningFeeOrder>('/expert/joining-fee/order', { method: 'POST' });
+}
+
+export function verifyJoiningFeeOrder(payload: {
+  razorpay_order_id: string;
+  razorpay_payment_id: string;
+  razorpay_signature: string;
+}) {
+  return request<{
+    cleared: boolean;
+    status: JoiningFeeQuote['status'];
+    amount?: number;
+    paidAt?: string | null;
+    expert?: Expert;
+  }>('/expert/joining-fee/verify', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getJoiningFeeStatus() {
+  return request<{
+    status: JoiningFeeQuote['status'];
+    amount: number;
+    cleared: boolean;
+    paidAt?: string | null;
+    expert?: Expert;
+  }>('/expert/joining-fee/status');
+}
+
+/** True when KYC is done but category joining deposit is still unpaid. */
+export function needsJoiningDeposit(expert: Pick<Expert, 'kycStatus' | 'joiningFeeStatus'> | null | undefined) {
+  return expert?.kycStatus === 'verified' && expert?.joiningFeeStatus === 'pending';
 }

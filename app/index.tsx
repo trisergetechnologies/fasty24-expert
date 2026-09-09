@@ -3,7 +3,7 @@ import { ActivityIndicator, View } from 'react-native';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { getToken } from '../lib/storage';
-import { getMe } from '../lib/api';
+import { getMe, needsJoiningDeposit } from '../lib/api';
 import { colors } from '../constants/theme';
 
 export default function AuthGate() {
@@ -18,6 +18,10 @@ export default function AuthGate() {
         const expert = await getMe();
         if (expert.kycStatus !== 'verified') {
           router.replace('/onboarding');
+          return;
+        }
+        if (needsJoiningDeposit(expert)) {
+          router.replace('/onboarding/deposit');
           return;
         }
         router.replace('/(tabs)/home');

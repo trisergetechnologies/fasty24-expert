@@ -46,6 +46,7 @@ export default function EstimateBuilderScreen() {
   const [uploading, setUploading] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [category, setCategory] = useState<string | undefined>();
+  const [serviceId, setServiceId] = useState<string | undefined>();
   const [lines, setLines] = useState<DraftLine[]>([]);
   const [notes, setNotes] = useState('');
   const [diagnosisImages, setDiagnosisImages] = useState<string[]>([]);
@@ -56,7 +57,8 @@ export default function EstimateBuilderScreen() {
     setLoading(true);
     try {
       const booking = await getBooking(bookingId);
-      setCategory(booking.serviceId || undefined);
+      setServiceId(booking.serviceId || undefined);
+      setCategory(booking.categorySlugs?.[0] || booking.serviceSlug || undefined);
 
       if (estimateId) {
         const existing = await getEstimate(estimateId);
@@ -248,6 +250,9 @@ export default function EstimateBuilderScreen() {
               <Text style={styles.addLink}>+ Add</Text>
             </TouchableOpacity>
           </View>
+          <Text style={styles.payoutHint}>
+            Parts go 100% to you. Labour follows your service share.
+          </Text>
 
           {lines.length === 0 ? (
             <Text style={styles.emptyLines}>
@@ -318,6 +323,7 @@ export default function EstimateBuilderScreen() {
       <PartPicker
         visible={pickerOpen}
         category={category}
+        serviceId={serviceId}
         onClose={() => setPickerOpen(false)}
         onSelect={addLine}
       />
@@ -340,6 +346,7 @@ const styles = StyleSheet.create({
   content: { padding: spacing.md, paddingBottom: spacing.xl },
   section: { marginTop: spacing.md },
   cardTitle: { fontSize: 16, fontWeight: '800', color: colors.black, marginBottom: spacing.sm },
+  payoutHint: { color: colors.gray, fontSize: 12, marginBottom: spacing.sm, marginTop: -4 },
   notes: { height: 90, textAlignVertical: 'top' },
   photoRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: spacing.sm },
   diagPhoto: {

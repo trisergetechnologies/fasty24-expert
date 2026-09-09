@@ -62,11 +62,12 @@ export default function OfferCard({ offer, onResponded, fullscreen = false }: Pr
     if (accepted) setAccepting(true);
     else setDeclining(true);
     try {
-      await respondToOffer(offer.bookingId, accepted);
+      const result = await respondToOffer(offer.bookingId, accepted);
       onResponded();
       if (accepted) {
-        markOnJob(offer.bookingId);
-        router.push(`/job/${offer.bookingId}`);
+        const goOnJob = result?.goOnJob !== false;
+        if (goOnJob) markOnJob(offer.bookingId);
+        router.push(goOnJob ? `/job/${offer.bookingId}` : '/(tabs)/jobs');
       }
     } catch (err: any) {
       Alert.alert(
@@ -89,7 +90,9 @@ export default function OfferCard({ offer, onResponded, fullscreen = false }: Pr
   const inner = (
     <View style={[styles.card, fullscreen && styles.cardFull]}>
       <View style={styles.topRow}>
-        <Text style={styles.badge}>{expired ? 'EXPIRED' : 'NEW JOB'}</Text>
+        <Text style={styles.badge}>
+          {expired ? 'EXPIRED' : offer.bookingType === 'scheduled' ? 'SCHEDULED JOB' : 'NEW JOB'}
+        </Text>
         <View style={[styles.timerChip, (urgency || expired) && styles.timerChipUrgent]}>
           <Text style={[styles.timerText, (urgency || expired) && styles.timerTextUrgent]}>
             {expired ? '0s' : `${secondsLeft}s`}

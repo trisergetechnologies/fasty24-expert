@@ -13,7 +13,7 @@ import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { getMe, submitOnboarding, updateMe, uploadImage, getCatalog } from '../../lib/api';
+import { getMe, submitOnboarding, updateMe, uploadImage, getCatalog, needsJoiningDeposit } from '../../lib/api';
 import { pickImage } from '../../lib/pickImage';
 import ImageSourceSheet from '../../components/ImageSourceSheet';
 import TradePicker, { EMAIL_RE, GENDER_OPTIONS, inferEnrolledFromSkills } from '../../components/TradePicker';
@@ -61,7 +61,7 @@ export default function OnboardingScreen() {
         const me = await getMe();
         setExpert(me);
         if (me.kycStatus === 'verified') {
-          router.replace('/(tabs)/home');
+          router.replace(needsJoiningDeposit(me) ? '/onboarding/deposit' : '/(tabs)/home');
           return;
         }
         if (me.name && me.name !== 'New Expert') setFullName(me.name);
@@ -264,7 +264,7 @@ export default function OnboardingScreen() {
         <Text style={styles.waitTitle}>Application under review</Text>
         <Text style={styles.waitSub}>
           Thanks {fullName.split(' ')[0] || 'partner'}. An admin will verify your documents.
-          You can go online only after approval — we will notify you.
+          After approval you may be asked for a category joining deposit before going online.
         </Text>
       </SafeAreaView>
     );
@@ -281,8 +281,8 @@ export default function OnboardingScreen() {
           <Text style={styles.welcomeTitle}>Become a Fasty24 partner</Text>
           <Text style={styles.welcomeSub}>
             We verify every expert so customers can trust you. KYC takes about 5 minutes.
-            After you submit, an admin reviews your documents — then you can go online and
-            start taking jobs.
+            After you submit, an admin reviews your documents — then you may pay a category
+            joining deposit before going online.
           </Text>
           <Text style={styles.label}>Your full name</Text>
           <TextInput
@@ -324,7 +324,7 @@ export default function OnboardingScreen() {
           <View style={styles.welcomePoints}>
             <WelcomePoint text="Aadhaar, PAN, live selfie, and bank details" />
             <WelcomePoint text="Pick the skills you actually do" />
-            <WelcomePoint text="Wait for approval — no home access until then" />
+            <WelcomePoint text="Wait for approval — then pay joining deposit if required" />
           </View>
           <GradientButton title="Start KYC" onPress={next} style={{ marginTop: spacing.lg }} />
         </ScrollView>

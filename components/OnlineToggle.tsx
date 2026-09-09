@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { router } from 'expo-router';
 import * as Location from 'expo-location';
 import { goOnline, goOffline } from '../lib/api';
 import { startOnlinePresence, stopOnlinePresence, startJobLocationTracking } from '../lib/presence';
@@ -16,6 +17,7 @@ import { colors, spacing, radius } from '../constants/theme';
 interface Props {
   initialOnline?: boolean;
   kycStatus?: string;
+  joiningFeeStatus?: string | null;
   jobLocked?: boolean;
   activeBookingId?: string | null;
   onStatusChange?: (online: boolean) => void;
@@ -24,6 +26,7 @@ interface Props {
 export default function OnlineToggle({
   initialOnline = false,
   kycStatus,
+  joiningFeeStatus,
   jobLocked = false,
   activeBookingId,
   onStatusChange,
@@ -52,6 +55,14 @@ export default function OnlineToggle({
       Alert.alert(
         'KYC required',
         'Complete onboarding and wait for admin approval before going online.',
+      );
+      return;
+    }
+    if (value && joiningFeeStatus === 'pending') {
+      Alert.alert(
+        'Joining deposit required',
+        'Pay your category joining deposit before going online.',
+        [{ text: 'Pay now', onPress: () => router.push('/onboarding/deposit') }, { text: 'Cancel', style: 'cancel' }],
       );
       return;
     }

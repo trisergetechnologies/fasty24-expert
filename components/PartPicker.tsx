@@ -18,11 +18,12 @@ import { colors, common, radius, spacing } from '../constants/theme';
 interface Props {
   visible: boolean;
   category?: string;
+  serviceId?: string;
   onClose: () => void;
   onSelect: (line: EstimateLineInput & { name: string }) => void;
 }
 
-export default function PartPicker({ visible, category, onClose, onSelect }: Props) {
+export default function PartPicker({ visible, category, serviceId, onClose, onSelect }: Props) {
   const [query, setQuery] = useState('');
   const [parts, setParts] = useState<Part[]>([]);
   const [loading, setLoading] = useState(false);
@@ -34,13 +35,13 @@ export default function PartPicker({ visible, category, onClose, onSelect }: Pro
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setParts(await listParts({ category }));
+      setParts(await listParts({ category, serviceId }));
     } catch {
       setParts([]);
     } finally {
       setLoading(false);
     }
-  }, [category]);
+  }, [category, serviceId]);
 
   useEffect(() => {
     if (visible) load();

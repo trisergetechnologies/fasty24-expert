@@ -97,6 +97,7 @@ export default function HomeScreen() {
         <OnlineToggle
           initialOnline={!!(expert?.isOnline || expert?.status === 'online' || expert?.status === 'on_job')}
           kycStatus={expert?.kycStatus}
+          joiningFeeStatus={expert?.joiningFeeStatus}
           jobLocked={expert?.status === 'on_job' || !!expert?.activeBooking}
           activeBookingId={expert?.activeBooking}
         />

@@ -3,7 +3,7 @@ import { ActivityIndicator, View } from 'react-native';
 import { Tabs, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getMe } from '../../lib/api';
+import { getMe, needsJoiningDeposit } from '../../lib/api';
 import { requestHomePermissions } from '../../lib/permissions';
 import { colors } from '../../constants/theme';
 
@@ -41,6 +41,10 @@ export default function TabsLayout() {
         if (cancelled) return;
         if (expert.kycStatus !== 'verified') {
           router.replace('/onboarding');
+          return;
+        }
+        if (needsJoiningDeposit(expert)) {
+          router.replace('/onboarding/deposit');
           return;
         }
         setReady(true);

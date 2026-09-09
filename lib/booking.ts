@@ -90,6 +90,7 @@ export function normalizeBookingDetail(raw: RawBooking): BookingDetail {
     ...summary,
     address: String(raw.address || raw.location?.address || raw.pickupLocation?.address || ''),
     customerPhone: String(raw.customerPhone || raw.customer?.phone || ''),
+    canCall: raw.canCall === true,
     sessionOtp: raw.sessionOtp,
     addOns: items
       .filter((it) => it?.isAddOn)
@@ -103,6 +104,9 @@ export function normalizeBookingDetail(raw: RawBooking): BookingDetail {
     timeline: raw.timeline,
     arrivedAt: raw.timeline?.arrivedAt || raw.arrivedAt || null,
     backendStatus: String(raw.status || summary.status || ''),
+    bookingType: raw.bookingType === 'scheduled' ? 'scheduled' : 'instant',
+    scheduledFor: raw.scheduledFor || raw.scheduledAt || null,
+    scheduledSlot: raw.scheduledSlot || null,
     location: raw.location ?? undefined,
     distanceKm: typeof raw.distanceKm === 'number' ? raw.distanceKm : null,
     quotedEtaMin: typeof raw.quotedEtaMin === 'number' ? raw.quotedEtaMin : null,
@@ -117,6 +121,8 @@ export function normalizeBookingDetail(raw: RawBooking): BookingDetail {
           overtimeMin: typeof raw.jobTimer.overtimeMin === 'number' ? raw.jobTimer.overtimeMin : null,
         }
       : null,
+    categorySlugs: Array.isArray(raw.categorySlugs) ? raw.categorySlugs.map(String) : [],
+    serviceSlug: raw.serviceSlug ? String(raw.serviceSlug) : undefined,
   };
 }
 
@@ -135,6 +141,7 @@ export function normalizeOffer(raw: RawBooking | null | undefined): Offer | null
     address: String(raw.address || raw.location?.address || raw.pickupLocation?.address || ''),
     offerExpiresInSec: Math.max(1, toNumber(raw.offerExpiresInSec, 60)),
     scheduledAt: summary.scheduledAt,
+    bookingType: raw.bookingType === 'scheduled' ? 'scheduled' : 'instant',
   };
 }
 

@@ -16,7 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import { getMe, updateMe, submitTraining, getCatalog } from '../../lib/api';
+import { getMe, updateMe, submitTraining, getCatalog, needsJoiningDeposit } from '../../lib/api';
 import type { CatalogCategory, Expert, ExpertGender } from '../../lib/api';
 import { clearAll } from '../../lib/storage';
 import { disconnectSocket } from '../../lib/socket';
@@ -352,6 +352,19 @@ export default function ProfileScreen() {
           {expert.kycStatus === 'rejected' && !!expert.kycNote && (
             <Text style={styles.kycNote}>{expert.kycNote}</Text>
           )}
+          {needsJoiningDeposit(expert) && (
+            <GradientButton
+              title={`Pay joining deposit${expert.joiningFeeAmount ? ` · ₹${expert.joiningFeeAmount}` : ''}`}
+              onPress={() => router.push('/onboarding/deposit')}
+              style={styles.actionBtn}
+            />
+          )}
+          {expert.joiningFeeStatus === 'paid' || expert.joiningFeeStatus === 'waived' ? (
+            <Text style={[styles.kycNote, { color: colors.success }]}>
+              Joining deposit {expert.joiningFeeStatus}
+              {expert.joiningFeeAmount ? ` (₹${expert.joiningFeeAmount})` : ''}
+            </Text>
+          ) : null}
         </View>
 
         {/* Training */}

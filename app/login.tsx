@@ -14,7 +14,7 @@ import {
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
-import { requestOtp, verifyOtp } from '../lib/api';
+import { requestOtp, verifyOtp, needsJoiningDeposit } from '../lib/api';
 import { setToken, setUser } from '../lib/storage';
 import { connectSocket } from '../lib/socket';
 import { registerForPushNotifications } from '../lib/push';
@@ -63,6 +63,8 @@ export default function LoginScreen() {
       resumeOfferSession();
       if (res.needsOnboarding || expert?.kycStatus !== 'verified') {
         router.replace('/onboarding');
+      } else if (needsJoiningDeposit(expert)) {
+        router.replace('/onboarding/deposit');
       } else {
         router.replace('/(tabs)/home');
       }

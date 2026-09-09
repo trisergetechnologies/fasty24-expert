@@ -21,6 +21,7 @@ export default function RootLayout() {
             <Stack.Screen name="index" />
             <Stack.Screen name="login" />
             <Stack.Screen name="onboarding/index" />
+            <Stack.Screen name="onboarding/deposit" />
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="job/[id]" options={{ presentation: 'card' }} />
             <Stack.Screen name="estimate/[bookingId]" options={{ presentation: 'card' }} />
