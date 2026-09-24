@@ -2,6 +2,7 @@ import * as Location from 'expo-location';
 import { JOB_LOCATION_TASK, getTrackingBookingId, setTrackingBookingId } from './jobLocationTask';
 import { emitLocation } from './socket';
 import { startOnlineHeartbeat, stopOnlineHeartbeat } from './onlineHeartbeat';
+import { PRECISE_JOB_WATCH, PRECISE_WATCH } from './gps';
 
 export type PresenceMode = 'offline' | 'online' | 'job';
 
@@ -52,11 +53,7 @@ export async function startOnlinePresence(): Promise<void> {
 
   await stopForegroundWatch();
   watchSub = await Location.watchPositionAsync(
-    {
-      accuracy: Location.Accuracy.Balanced,
-      timeInterval: 15_000,
-      distanceInterval: 50,
-    },
+    PRECISE_WATCH,
     (loc) => {
       emitLocation(loc.coords.latitude, loc.coords.longitude);
     },
@@ -68,9 +65,9 @@ export async function startOnlinePresence(): Promise<void> {
     await restartLocationService({
       title: 'You are online',
       body: 'Waiting for jobs — Fasty24 is sharing your location with dispatch.',
-      accuracy: Location.Accuracy.Balanced,
-      timeInterval: 15_000,
-      distanceInterval: 50,
+      accuracy: PRECISE_WATCH.accuracy,
+      timeInterval: PRECISE_WATCH.timeInterval,
+      distanceInterval: PRECISE_WATCH.distanceInterval,
     });
   } catch {
     // Foreground watch still covers presence while the app is open.
@@ -90,11 +87,7 @@ export async function startJobLocationTracking(bookingId: string): Promise<void>
 
   await stopForegroundWatch();
   watchSub = await Location.watchPositionAsync(
-    {
-      accuracy: Location.Accuracy.High,
-      timeInterval: 5000,
-      distanceInterval: 20,
-    },
+    PRECISE_JOB_WATCH,
     (loc) => {
       emitLocation(loc.coords.latitude, loc.coords.longitude, bookingId);
     },
@@ -104,9 +97,9 @@ export async function startJobLocationTracking(bookingId: string): Promise<void>
     await restartLocationService({
       title: 'Sharing your location',
       body: 'The customer can see your live location until you arrive.',
-      accuracy: Location.Accuracy.High,
-      timeInterval: 5000,
-      distanceInterval: 20,
+      accuracy: PRECISE_JOB_WATCH.accuracy,
+      timeInterval: PRECISE_JOB_WATCH.timeInterval,
+      distanceInterval: PRECISE_JOB_WATCH.distanceInterval,
     });
   } catch {
     // In-app watch still covers the job screen if the foreground service cannot start.

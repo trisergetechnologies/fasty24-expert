@@ -211,7 +211,9 @@ export default function ProfileScreen() {
 
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
-            <Text style={styles.statValue}>⭐ {expert.rating?.toFixed(1) ?? '—'}</Text>
+            <Text style={styles.statValue}>
+              ⭐ {expert.ratingCount ? expert.rating?.toFixed(1) ?? '—' : 'New'}
+            </Text>
             <Text style={styles.statLabel}>Rating</Text>
           </View>
           <View style={styles.statCard}>

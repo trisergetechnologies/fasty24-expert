@@ -91,6 +91,7 @@ export function normalizeBookingDetail(raw: RawBooking): BookingDetail {
     address: String(raw.address || raw.location?.address || raw.pickupLocation?.address || ''),
     customerPhone: String(raw.customerPhone || raw.customer?.phone || ''),
     canCall: raw.canCall === true,
+    virtualNumber: raw.virtualNumber ? String(raw.virtualNumber) : null,
     sessionOtp: raw.sessionOtp,
     addOns: items
       .filter((it) => it?.isAddOn)
@@ -123,6 +124,7 @@ export function normalizeBookingDetail(raw: RawBooking): BookingDetail {
       : null,
     categorySlugs: Array.isArray(raw.categorySlugs) ? raw.categorySlugs.map(String) : [],
     serviceSlug: raw.serviceSlug ? String(raw.serviceSlug) : undefined,
+    rateCard: raw.rateCard && typeof raw.rateCard === 'object' ? raw.rateCard : undefined,
   };
 }
 
@@ -149,6 +151,13 @@ export function normalizeOffers(raw: unknown): Offer[] {
   if (!raw) return [];
   const list = Array.isArray(raw) ? raw : [raw];
   return list.map((item) => normalizeOffer(item as RawBooking)).filter((o): o is Offer => !!o);
+}
+
+export function formatDistanceKm(km: number | null | undefined): string {
+  if (typeof km !== 'number' || !Number.isFinite(km) || km <= 0) return '—';
+  if (km < 0.015) return 'Nearby';
+  if (km < 1) return `${Math.round(km * 1000)} m`;
+  return `${km.toFixed(1)} km`;
 }
 
 export function formatInr(amount: number | null | undefined): string {

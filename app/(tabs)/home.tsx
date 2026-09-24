@@ -89,7 +89,9 @@ export default function HomeScreen() {
             <Text style={styles.name}>{firstName} 👋</Text>
           </View>
           <View style={styles.ratingChip}>
-            <Text style={styles.ratingText}>⭐ {expert?.rating?.toFixed(1) ?? '—'}</Text>
+            <Text style={styles.ratingText}>
+              ⭐ {expert?.ratingCount ? expert.rating?.toFixed(1) : 'New'}
+            </Text>
           </View>
         </View>
 

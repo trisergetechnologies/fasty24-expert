@@ -132,7 +132,8 @@ export async function presentJobOfferNotification(raw: Record<string, any> | und
     await ensureCategory();
     const bookingId = raw?.bookingId ? String(raw.bookingId) : undefined;
     const service = raw?.serviceName ? String(raw.serviceName) : 'A customer needs an expert';
-    const earning = raw?.expertEarning != null ? ` · ₹${raw.expertEarning}` : '';
+    const earningNum = Number(raw?.expertEarning);
+    const earning = Number.isFinite(earningNum) && earningNum > 0 ? ` · ₹${earningNum}` : '';
     const title = 'New job nearby!';
     const body = `${service}${earning}. Accept or decline now.`;
 

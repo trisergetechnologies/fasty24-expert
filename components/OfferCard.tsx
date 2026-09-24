@@ -12,7 +12,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { respondToOffer, type Offer } from '../lib/api';
-import { formatInr, formatDateTime } from '../lib/booking';
+import { formatInr, formatDateTime, formatDistanceKm } from '../lib/booking';
 import { stopJobBuzzer } from '../lib/jobAlert';
 import { markOnJob } from '../lib/presence';
 import { colors, spacing, radius, shadows, gradients } from '../constants/theme';
@@ -80,10 +80,7 @@ export default function OfferCard({ offer, onResponded, fullscreen = false }: Pr
     }
   }
 
-  const distanceLabel =
-    typeof offer.customerDistance === 'number' && offer.customerDistance > 0
-      ? `${offer.customerDistance.toFixed(1)} km`
-      : '—';
+  const distanceLabel = formatDistanceKm(offer.customerDistance);
   const etaLabel = offer.eta > 0 ? `${offer.eta} min` : '—';
   const urgency = secondsLeft <= 10;
 

@@ -11,6 +11,7 @@ import { router } from 'expo-router';
 import * as Location from 'expo-location';
 import { goOnline, goOffline } from '../lib/api';
 import { startOnlinePresence, stopOnlinePresence, startJobLocationTracking } from '../lib/presence';
+import { getPreciseCoords } from '../lib/gps';
 import { registerForPushNotifications, requestNotificationPermission } from '../lib/push';
 import { colors, spacing, radius } from '../constants/theme';
 
@@ -89,8 +90,8 @@ export default function OnlineToggle({
           setLoading(false);
           return;
         }
-        const { coords } = await Location.getCurrentPositionAsync({});
-        await goOnline(coords.latitude, coords.longitude);
+        const { lat, lng } = await getPreciseCoords();
+        await goOnline(lat, lng);
         await startOnlinePresence();
       } else {
         await stopOnlinePresence();

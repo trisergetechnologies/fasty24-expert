@@ -1,14 +1,13 @@
 import * as Location from 'expo-location';
 import { emitLocation } from './socket';
+import { getPreciseCoords } from './gps';
 
 let interval: ReturnType<typeof setInterval> | null = null;
 
 async function sendLocation() {
   try {
-    const { coords } = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Balanced,
-    });
-    emitLocation(coords.latitude, coords.longitude);
+    const { lat, lng } = await getPreciseCoords();
+    emitLocation(lat, lng);
   } catch {
     // GPS can fail in the background; next tick retries.
   }

@@ -25,6 +25,7 @@ import {
   uploadImage,
   ApiError,
   EstimateLineInput,
+  RateCard,
 } from '../../lib/api';
 import { colors, common, radius, shadows, spacing } from '../../constants/theme';
 
@@ -47,6 +48,7 @@ export default function EstimateBuilderScreen() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [category, setCategory] = useState<string | undefined>();
   const [serviceId, setServiceId] = useState<string | undefined>();
+  const [rateCard, setRateCard] = useState<RateCard | null>(null);
   const [lines, setLines] = useState<DraftLine[]>([]);
   const [notes, setNotes] = useState('');
   const [diagnosisImages, setDiagnosisImages] = useState<string[]>([]);
@@ -59,6 +61,7 @@ export default function EstimateBuilderScreen() {
       const booking = await getBooking(bookingId);
       setServiceId(booking.serviceId || undefined);
       setCategory(booking.categorySlugs?.[0] || booking.serviceSlug || undefined);
+      setRateCard(booking.rateCard || null);
 
       if (estimateId) {
         const existing = await getEstimate(estimateId);
@@ -70,6 +73,8 @@ export default function EstimateBuilderScreen() {
             partId: l.partId,
             name: l.name,
             sku: l.sku,
+            brand: l.sku || undefined,
+            source: l.sku && !l.partId ? 'rate_card' : l.partId ? 'catalog' : 'custom',
             unit: l.unit,
             kind: l.kind,
             imageUrl: l.imageUrl,
@@ -98,7 +103,13 @@ export default function EstimateBuilderScreen() {
 
   function addLine(line: EstimateLineInput & { name: string }) {
     setLines((prev) => {
-      const existing = prev.findIndex((l) => l.partId && l.partId === line.partId);
+      const existing = prev.findIndex((l) => {
+        if (l.partId && line.partId && l.partId === line.partId) return true;
+        if (line.source === 'rate_card' && l.source === 'rate_card' && l.name === line.name && (l.brand || '') === (line.brand || '')) {
+          return true;
+        }
+        return false;
+      });
       if (existing >= 0) {
         const next = [...prev];
         next[existing] = { ...next[existing], qty: next[existing].qty + 1 };
@@ -138,11 +149,13 @@ export default function EstimateBuilderScreen() {
         partId: l.partId ?? undefined,
         name: l.name,
         sku: l.sku,
+        brand: l.brand || l.sku,
         unit: l.unit,
         kind: l.kind,
         imageUrl: l.imageUrl,
         qty: l.qty,
         unitPrice: l.unitPrice,
+        source: l.source,
       })),
       diagnosisNotes: notes,
       diagnosisImages,
@@ -251,12 +264,12 @@ export default function EstimateBuilderScreen() {
             </TouchableOpacity>
           </View>
           <Text style={styles.payoutHint}>
-            Parts go 100% to you. Labour follows your service share.
+            Prefer the published rate card so the customer can accept the same prices they already saw.
           </Text>
 
           {lines.length === 0 ? (
             <Text style={styles.emptyLines}>
-              No items yet. Add the parts you need to replace.
+              No items yet. Add from the rate card, then send it to the customer for approval.
             </Text>
           ) : (
             lines.map((line) => (
@@ -266,8 +279,9 @@ export default function EstimateBuilderScreen() {
                     {line.name}
                   </Text>
                   <Text style={styles.lineMeta}>
-                    ₹{line.unitPrice} · {line.kind === 'labour' ? 'Labour' : 'Part'}
-                    {line.partId ? '' : ' · custom'}
+                    ₹{line.unitPrice} · {line.source === 'rate_card' ? 'Rate card' : line.kind === 'labour' ? 'Labour' : 'Part'}
+                    {line.brand ? ` · ${line.brand}` : ''}
+                    {line.partId || line.source === 'rate_card' ? '' : ' · custom'}
                   </Text>
                 </View>
                 <View style={styles.qtyBox}>
@@ -324,6 +338,7 @@ export default function EstimateBuilderScreen() {
         visible={pickerOpen}
         category={category}
         serviceId={serviceId}
+        rateCard={rateCard}
         onClose={() => setPickerOpen(false)}
         onSelect={addLine}
       />

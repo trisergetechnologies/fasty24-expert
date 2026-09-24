@@ -18,7 +18,7 @@ export interface Expert {
   gender?: ExpertGender;
   bio?: string;
   photoUrl?: string;
-  rating: number;
+  rating: number | null;
   ratingCount?: number;
   completedJobs?: number;
   isOnline: boolean;
@@ -114,8 +114,10 @@ export type BookingStatus =
 export interface BookingDetail extends BookingSummary {
   address: string;
   customerPhone: string;
-  /** When true, Call uses masked Exotel Connect (no real MSISDN in the payload). */
+  /** When true, Call starts a masked TeleCMI click-to-call (rings your phone first). */
   canCall?: boolean;
+  /** Optional shared DID — dial-in fallback; primary UX is POST /bookings/:id/call */
+  virtualNumber?: string | null;
   sessionOtp?: { startCode: string; endCode: string };
   addOns: { serviceId: string; name: string; amount: number }[];
   paymentMethod: string;
@@ -148,6 +150,27 @@ export interface BookingDetail extends BookingSummary {
   } | null;
   categorySlugs?: string[];
   serviceSlug?: string;
+  rateCard?: RateCard;
+}
+
+export interface RateCardItem {
+  name: string;
+  price: number;
+  notes: string;
+}
+
+export interface RateCardBrand {
+  name: string;
+  items: RateCardItem[];
+}
+
+export interface RateCard {
+  title: string;
+  brands: RateCardBrand[];
+}
+
+export function rateCardBrands(rateCard?: RateCard | null): RateCardBrand[] {
+  return (rateCard?.brands || []).filter((b) => (b.items?.length ?? 0) > 0);
 }
 
 export interface AvailableAddon {
@@ -233,11 +256,13 @@ export interface EstimateLineInput {
   partId?: string | null;
   name?: string;
   sku?: string;
+  brand?: string;
   unit?: string;
   kind?: 'part' | 'labour';
   imageUrl?: string;
   qty: number;
   unitPrice?: number;
+  source?: 'catalog' | 'rate_card' | 'custom';
 }
 
 export interface Offer {
@@ -439,7 +464,7 @@ export function getBooking(id: string) {
   return request<BookingDetail>(`/bookings/${id}`);
 }
 
-/** Starts a masked Exotel Connect call (rings your phone first, then the customer). */
+/** Starts a masked TeleCMI call (rings your phone first, then the customer). */
 export function requestBookingCall(id: string) {
   return request<{ ok: boolean; callSid?: string; status?: string; message?: string }>(
     `/bookings/${id}/call`,

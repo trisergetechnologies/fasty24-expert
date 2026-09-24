@@ -9,6 +9,7 @@ import {
   Alert,
   Linking,
   Modal,
+  Platform,
   FlatList,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -262,26 +263,40 @@ export default function JobDetailScreen() {
     }
   }
 
-  async function callCustomer() {
-    if (!id || !booking?.canCall || calling) return;
+  async function handleCall() {
+    if (!id || calling) return;
     setCalling(true);
     try {
       const res = await requestBookingCall(id);
       Alert.alert(
-        'Calling…',
-        res.message || 'Answer your phone — we will connect you to the customer.',
+        'Calling you now',
+        res.message || 'Answer your phone to connect with the customer.',
       );
     } catch (err: any) {
-      Alert.alert('Could not call', err?.message ?? 'Please try again.');
+      Alert.alert(
+        'Could not start call',
+        err?.message ?? 'Please try again.',
+      );
     } finally {
       setCalling(false);
     }
   }
 
   function openMaps() {
+    const lat = booking?.location?.lat;
+    const lng = booking?.location?.lng;
+    const label = booking?.address || 'Customer';
+    if (typeof lat === 'number' && typeof lng === 'number' && Number.isFinite(lat) && Number.isFinite(lng)) {
+      const dest = `${lat},${lng}`;
+      const url =
+        Platform.OS === 'ios'
+          ? `https://maps.apple.com/?daddr=${dest}&q=${encodeURIComponent(label)}`
+          : `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`;
+      Linking.openURL(url);
+      return;
+    }
     if (!booking?.address) return;
-    const query = encodeURIComponent(booking.address);
-    Linking.openURL(`https://maps.google.com/?q=${query}`);
+    Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(booking.address)}`);
   }
 
   if (loading) {
@@ -395,7 +410,11 @@ export default function JobDetailScreen() {
 
           <View style={styles.divider} />
 
-          <TouchableOpacity style={styles.rowBetween} onPress={openMaps} disabled={!booking.address}>
+          <TouchableOpacity
+            style={styles.rowBetween}
+            onPress={openMaps}
+            disabled={!booking.address && (booking.location?.lat == null || booking.location?.lng == null)}
+          >
             <View style={styles.rowStart}>
               <Ionicons name="location-outline" size={18} color={colors.gray} />
               <Text style={styles.rowText} numberOfLines={2}>{booking.address || 'No address provided'}</Text>
@@ -411,13 +430,13 @@ export default function JobDetailScreen() {
             <View style={{ flex: 1, paddingRight: 12 }}>
               <Text style={styles.customerName}>{booking.customerName}</Text>
               <Text style={styles.customerPhone}>
-                {booking.canCall ? 'Call via Fasty24 (number hidden)' : 'Calling unavailable'}
+                {booking.canCall ? 'Tap Call — we will ring your phone' : 'Calling unavailable'}
               </Text>
             </View>
             {booking.canCall ? (
               <TouchableOpacity
                 style={[styles.callBtn, calling && { opacity: 0.6 }]}
-                onPress={callCustomer}
+                onPress={handleCall}
                 disabled={calling}
               >
                 {calling ? (
@@ -482,8 +501,8 @@ export default function JobDetailScreen() {
             {activeEstimates.length === 0 ? (
               <View style={[common.card, styles.card]}>
                 <Text style={styles.estimateEmpty}>
-                  Found a part that needs replacing? Create an estimate and send it to the
-                  customer for approval.
+                  Found a part that needs replacing? Add it from the rate card and send the estimate
+                  to the customer for approval.
                 </Text>
               </View>
             ) : (

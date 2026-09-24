@@ -12,18 +12,19 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { listParts, Part, EstimateLineInput } from '../lib/api';
+import { listParts, Part, EstimateLineInput, RateCard, rateCardBrands } from '../lib/api';
 import { colors, common, radius, spacing } from '../constants/theme';
 
 interface Props {
   visible: boolean;
   category?: string;
   serviceId?: string;
+  rateCard?: RateCard | null;
   onClose: () => void;
   onSelect: (line: EstimateLineInput & { name: string }) => void;
 }
 
-export default function PartPicker({ visible, category, serviceId, onClose, onSelect }: Props) {
+export default function PartPicker({ visible, category, serviceId, rateCard, onClose, onSelect }: Props) {
   const [query, setQuery] = useState('');
   const [parts, setParts] = useState<Part[]>([]);
   const [loading, setLoading] = useState(false);
@@ -58,6 +59,22 @@ export default function PartPicker({ visible, category, serviceId, onClose, onSe
     );
   }, [parts, query]);
 
+  const rateGroups = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return rateCardBrands(rateCard)
+      .map((brand) => ({
+        name: brand.name,
+        items: brand.items.filter(
+          (item) =>
+            !q ||
+            item.name.toLowerCase().includes(q) ||
+            brand.name.toLowerCase().includes(q) ||
+            (item.notes || '').toLowerCase().includes(q),
+        ),
+      }))
+      .filter((g) => g.items.length > 0);
+  }, [rateCard, query]);
+
   function reset() {
     setQuery('');
     setCustomOpen(false);
@@ -69,6 +86,19 @@ export default function PartPicker({ visible, category, serviceId, onClose, onSe
   function handleClose() {
     reset();
     onClose();
+  }
+
+  function pickRateCard(brand: string, item: { name: string; price: number; notes: string }) {
+    onSelect({
+      name: item.name,
+      brand,
+      sku: brand,
+      kind: 'part',
+      unitPrice: item.price,
+      qty: 1,
+      source: 'rate_card',
+    });
+    handleClose();
   }
 
   function pickCatalog(part: Part) {
@@ -89,7 +119,7 @@ export default function PartPicker({ visible, category, serviceId, onClose, onSe
     const name = customName.trim();
     const price = Number(customPrice);
     if (!name || !Number.isFinite(price) || price < 0) return;
-    onSelect({ name, kind: customKind, unitPrice: Math.round(price), qty: 1 });
+    onSelect({ name, kind: customKind, unitPrice: Math.round(price), qty: 1, source: 'custom' });
     handleClose();
   }
 
@@ -160,14 +190,14 @@ export default function PartPicker({ visible, category, serviceId, onClose, onSe
               <Ionicons name="search" size={18} color={colors.muted} />
               <TextInput
                 style={styles.searchInput}
-                placeholder="Search parts, kits, SKU"
+                placeholder="Search rate card or catalog"
                 placeholderTextColor={colors.muted}
                 value={query}
                 onChangeText={setQuery}
               />
             </View>
 
-            {loading ? (
+            {loading && rateGroups.length === 0 ? (
               <View style={common.center}>
                 <ActivityIndicator color={colors.yellow} />
               </View>
@@ -176,10 +206,52 @@ export default function PartPicker({ visible, category, serviceId, onClose, onSe
                 data={filtered}
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={styles.list}
+                ListHeaderComponent={
+                  rateGroups.length ? (
+                    <View style={styles.rateWrap}>
+                      <Text style={styles.sectionLabel}>
+                        {rateCard?.title || 'Rate card'}
+                      </Text>
+                      <Text style={styles.sectionHint}>Published prices — customer sees these before approving</Text>
+                      {rateGroups.map((brand) => (
+                        <View key={brand.name || 'brand'} style={styles.brandBlock}>
+                          {!!brand.name && <Text style={styles.brandTitle}>{brand.name}</Text>}
+                          {brand.items.map((item) => (
+                            <TouchableOpacity
+                              key={`${brand.name}-${item.name}`}
+                              style={styles.partRow}
+                              onPress={() => pickRateCard(brand.name, item)}
+                            >
+                              <View style={[styles.thumb, styles.thumbFallback]}>
+                                <Ionicons name="pricetag-outline" size={20} color={colors.muted} />
+                              </View>
+                              <View style={styles.partInfo}>
+                                <Text style={styles.partName} numberOfLines={1}>
+                                  {item.name}
+                                </Text>
+                                <Text style={styles.partMeta} numberOfLines={1}>
+                                  {[brand.name, item.notes].filter(Boolean).join(' · ') || 'Rate card'}
+                                </Text>
+                              </View>
+                              <Text style={styles.partPrice}>₹{item.price}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      ))}
+                      {filtered.length > 0 ? (
+                        <Text style={[styles.sectionLabel, { marginTop: spacing.md }]}>Catalog</Text>
+                      ) : null}
+                    </View>
+                  ) : null
+                }
                 ListEmptyComponent={
-                  <Text style={styles.empty}>
-                    No parts found. Use "Add custom item" below.
-                  </Text>
+                  loading ? null : (
+                    <Text style={styles.empty}>
+                      {rateGroups.length
+                        ? 'No extra catalog parts. Pick from the rate card above or add a custom item.'
+                        : 'No parts found. Use "Add custom item" below.'}
+                    </Text>
+                  )
                 }
                 renderItem={({ item }) => (
                   <TouchableOpacity style={styles.partRow} onPress={() => pickCatalog(item)}>
@@ -257,6 +329,17 @@ const styles = StyleSheet.create({
   partMeta: { fontSize: 12, color: colors.gray, marginTop: 2 },
   partPrice: { fontSize: 15, fontWeight: '800', color: colors.black },
   empty: { textAlign: 'center', color: colors.gray, marginTop: spacing.xl, paddingHorizontal: spacing.lg },
+  rateWrap: { marginBottom: spacing.sm },
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: colors.black,
+    letterSpacing: 0.4,
+    marginBottom: 4,
+  },
+  sectionHint: { fontSize: 12, color: colors.gray, marginBottom: spacing.sm },
+  brandBlock: { marginBottom: spacing.sm },
+  brandTitle: { fontSize: 15, fontWeight: '800', color: colors.black, marginBottom: 8, marginTop: 4 },
   footer: {
     padding: spacing.md,
     borderTopWidth: 1,
