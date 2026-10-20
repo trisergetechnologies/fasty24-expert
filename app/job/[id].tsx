@@ -29,6 +29,7 @@ import {
   listBookingEstimates,
   addLineProof,
   requestBookingCall,
+  markBookingCash,
 } from '../../lib/api';
 import type { BookingDetail, AvailableAddon, Estimate } from '../../lib/api';
 import { normalizeBookingDetail, mergeBookingDetail, formatInr, formatDateTime } from '../../lib/booking';
@@ -145,6 +146,31 @@ export default function JobDetailScreen() {
       void pauseForegroundJobTracking();
     };
   }, [id, booking?.status, booking?.backendStatus]);
+
+  function handleCollectCash() {
+    if (!id || !booking) return;
+    Alert.alert(
+      'Cash collected?',
+      `Confirm you received ₹${formatInr(booking.totalAmount)} in cash for this booking.`,
+      [
+        { text: 'Not yet', style: 'cancel' },
+        {
+          text: 'Yes, collected',
+          onPress: async () => {
+            setActionLoading(true);
+            try {
+              const raw = await markBookingCash(id);
+              setBooking(normalizeBookingDetail(raw as any));
+            } catch (err: any) {
+              Alert.alert('Could not record cash', err?.message ?? 'Please try again.');
+            } finally {
+              setActionLoading(false);
+            }
+          },
+        },
+      ],
+    );
+  }
 
   async function handleMarkEnRoute() {
     if (!id) return;
@@ -466,6 +492,17 @@ export default function JobDetailScreen() {
             <Text style={styles.rowText}>Payment method</Text>
             <Text style={styles.rowValue}>{booking.paymentMethod}</Text>
           </View>
+          {booking.collectCash ? (
+            <TouchableOpacity
+              style={styles.cashBtn}
+              onPress={handleCollectCash}
+              disabled={actionLoading}
+            >
+              <Text style={styles.cashBtnText}>
+                Mark ₹{formatInr(booking.totalAmount)} cash collected
+              </Text>
+            </TouchableOpacity>
+          ) : null}
 
           {booking.addOns.length > 0 && (
             <>
@@ -724,6 +761,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.gray,
     marginTop: 2,
+  },
+  cashBtn: {
+    marginTop: spacing.sm,
+    backgroundColor: colors.yellow,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  cashBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.black,
   },
   callBtn: {
     width: 42,

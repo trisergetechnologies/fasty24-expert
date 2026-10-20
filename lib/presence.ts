@@ -72,7 +72,7 @@ export async function startOnlinePresence(): Promise<void> {
   } catch {
     // Foreground watch still covers presence while the app is open.
   }
-  if (mode !== 'job') mode = 'online';
+  if (getPresenceMode() !== 'job') mode = 'online';
 }
 
 export function markOnJob(bookingId?: string): void {

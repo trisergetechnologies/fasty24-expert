@@ -3,6 +3,7 @@
     "name": "Fasty24 Expert",
     "slug": "fasty24-expert",
     "version": "1.0.0",
+    "newArchEnabled": false,
     "orientation": "portrait",
     "scheme": "fasty24expert",
     "icon": "./assets/icon.png",
@@ -25,11 +26,14 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
       },
+      "edgeToEdgeEnabled": false,
       "package": "com.fasty24.expert",
       "googleServicesFile": "./google-services.json",
       "versionCode": 8,
       "blockedPermissions": [
-        "android.permission.ACCESS_BACKGROUND_LOCATION"
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO"
       ],
       "permissions": [
         "android.permission.RECEIVE_BOOT_COMPLETED",
@@ -42,8 +46,6 @@
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_LOCATION",
         "android.permission.CAMERA",
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.READ_MEDIA_IMAGES",
         "android.permission.RECORD_AUDIO"
       ]
     },
@@ -72,7 +74,8 @@
           "android": {
             "compileSdkVersion": 36,
             "targetSdkVersion": 36,
-            "buildToolsVersion": "36.0.0"
+            "buildToolsVersion": "36.0.0",
+            "ndkVersion": "28.1.13356709"
           }
         }
       ],

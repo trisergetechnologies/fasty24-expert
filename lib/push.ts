@@ -31,6 +31,8 @@ Notifications.setNotificationHandler({
     return {
       // Native module posts the call-style popup. Suppress the silent Expo copy.
       shouldShowAlert: !nativePostsJob,
+      shouldShowBanner: !nativePostsJob,
+      shouldShowList: !nativePostsJob,
       shouldPlaySound: !nativePostsJob,
       shouldSetBadge: false,
       priority: isJob

@@ -101,6 +101,10 @@ export function normalizeBookingDetail(raw: RawBooking): BookingDetail {
         amount: Number(it.price) || 0,
       })),
     paymentMethod: String(raw.paymentMethod || raw.payment?.method || raw.payment?.status || 'Online'),
+    collectCash:
+      raw.collectCash === true ||
+      ((raw.payment?.method === 'cash' || raw.payment?.method === 'cod') &&
+        raw.payment?.status !== 'paid'),
     notes: raw.notes ? String(raw.notes) : undefined,
     timeline: raw.timeline,
     arrivedAt: raw.timeline?.arrivedAt || raw.arrivedAt || null,

@@ -90,6 +90,54 @@ export interface EarningsSummary {
   breakdown: { date: string; amount: number; jobs: number }[];
 }
 
+export interface WalletBankSummary {
+  hasBank: boolean;
+  accountLast4: string;
+  ifsc: string;
+  holderName: string;
+}
+
+export interface ExpertWallet {
+  availableBalance: number;
+  pendingWithdrawal: number;
+  lifetimeCredited: number;
+  lifetimeWithdrawn: number;
+  bank: WalletBankSummary;
+}
+
+export type WalletTxType =
+  | 'job_credit'
+  | 'admin_credit'
+  | 'withdrawal_hold'
+  | 'withdrawal_paid'
+  | 'withdrawal_reject_release';
+
+export interface WalletTransaction {
+  id: string;
+  type: WalletTxType;
+  amount: number;
+  direction: 'credit' | 'debit';
+  balanceAfter: number;
+  note: string;
+  bookingId?: string | null;
+  withdrawalId?: string | null;
+  createdAt: string;
+}
+
+export interface WithdrawalRequest {
+  id: string;
+  amount: number;
+  status: 'pending' | 'approved' | 'rejected' | 'paid';
+  bankSnapshot: {
+    accountNumber: string;
+    ifsc: string;
+    holderName: string;
+  };
+  adminNote?: string;
+  processedAt?: string | null;
+  createdAt: string;
+}
+
 export interface BookingSummary {
   id: string;
   serviceId: string;
@@ -121,6 +169,8 @@ export interface BookingDetail extends BookingSummary {
   sessionOtp?: { startCode: string; endCode: string };
   addOns: { serviceId: string; name: string; amount: number }[];
   paymentMethod: string;
+  /** True when the customer chose cash on delivery and cash is still due. */
+  collectCash?: boolean;
   notes?: string;
   /** Raw backend lifecycle timestamps (assigned/arrived/started/completed/cancelled). */
   timeline?: Record<string, string | null | undefined>;
@@ -429,6 +479,25 @@ export function getEarnings(period: 'today' | 'week') {
   return request<EarningsSummary>(`/expert/earnings?period=${period}`);
 }
 
+// ─── Wallet ───────────────────────────────────────────────────────────────────
+
+export function getWallet() {
+  return request<ExpertWallet>('/expert/wallet');
+}
+
+export function getWalletTransactions(limit = 40) {
+  return request<{ transactions: WalletTransaction[] }>(
+    `/expert/wallet/transactions?limit=${limit}`,
+  );
+}
+
+export function requestWithdrawal(amount: number) {
+  return request<{ withdrawal: WithdrawalRequest; wallet: ExpertWallet }>(
+    '/expert/wallet/withdraw',
+    { method: 'POST', body: JSON.stringify({ amount }) },
+  );
+}
+
 // ─── Offer ────────────────────────────────────────────────────────────────────
 
 export async function getPendingOffers() {
@@ -581,6 +650,10 @@ export function createEstimatePaymentLink(estimateId: string) {
 
 export function markEstimateCash(estimateId: string) {
   return request<Estimate>(`/estimates/${estimateId}/payment/cash`, { method: 'POST' });
+}
+
+export function markBookingCash(bookingId: string) {
+  return request<BookingDetail>(`/bookings/${bookingId}/payment/cash`, { method: 'POST' });
 }
 
 export function getEstimatePaymentStatus(estimateId: string) {

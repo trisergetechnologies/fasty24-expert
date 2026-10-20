@@ -52,12 +52,10 @@ async function launchLibrary() {
     quality: 0.7,
     allowsEditing: false,
   };
-  try {
-    return await ImagePicker.launchImageLibraryAsync(options);
-  } catch {
-    // Some Android 13/14 devices need the legacy picker.
-    return ImagePicker.launchImageLibraryAsync({ ...options, legacy: true });
-  }
+  // System photo picker (PickVisualMedia). Do not fall back to the legacy
+  // gallery, and do not request READ_MEDIA_IMAGES — Play rejects that permission
+  // for one-time Aadhaar / profile photo uploads.
+  return ImagePicker.launchImageLibraryAsync(options);
 }
 
 export async function pickImage(opts: {
