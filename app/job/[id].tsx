@@ -19,6 +19,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import {
   getBooking,
+  activateJob,
   markEnRoute,
   markArrived,
   startJob,
@@ -308,6 +309,24 @@ export default function JobDetailScreen() {
     }
   }
 
+  async function handleActivate() {
+    if (!id || actionLoading) return;
+    setActionLoading(true);
+    try {
+      const updated = await activateJob(id);
+      setBooking(normalizeBookingDetail(updated as any));
+      void startJobLocationTracking(id);
+      Alert.alert(
+        'Working on this job',
+        'This is now your active job. You can travel / arrive / start here first.',
+      );
+    } catch (err: any) {
+      Alert.alert('Could not switch job', err?.message ?? 'Please try again.');
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
   function openMaps() {
     const lat = booking?.location?.lat;
     const lng = booking?.location?.lng;
@@ -357,13 +376,18 @@ export default function JobDetailScreen() {
     !!windowStart &&
     Date.parse(String(windowStart)) - Date.now() > 30 * 60 * 1000;
   const showEnRoute = EN_ROUTE_STATUSES.has(booking.status) && !scheduledTooEarly;
-  const showArrive = ARRIVAL_STATUSES.has(booking.status);
-  const showStart = booking.status === 'arrived' && !!booking.arrivalSelfie?.url;
+  // Backend allows arrive from assigned; experts already at the site can skip "on the way".
+  const showArrive =
+    ARRIVAL_STATUSES.has(booking.status) ||
+    (EN_ROUTE_STATUSES.has(booking.status) && !scheduledTooEarly);
+  // Start OTP once arrived — selfie is enforced at mark-arrived when required by server.
+  const showStart = booking.status === 'arrived';
   const showComplete = booking.status === 'in_progress';
   const isCompleted = booking.status === 'completed';
   const isCancelled = booking.status === 'cancelled';
   const isArrived = booking.status === 'arrived';
   const canEstimate = isArrived || booking.status === 'in_progress';
+  const showActivate = booking.canActivate === true && !isCompleted && !isCancelled;
 
   const activeEstimates = estimates.filter(
     (e) => !['cancelled', 'expired', 'rejected'].includes(e.status),
@@ -372,21 +396,22 @@ export default function JobDetailScreen() {
   const unsettledEstimate = approvedEstimates.find((e) => !e.settled) ?? null;
   const proofPending = approvedEstimates.some((e) => !e.proofComplete);
 
-  const primaryActionLabel = showEnRoute
-    ? "I'm on the way"
-    : showArrive
-      ? 'Mark Arrived'
+  const primaryActionLabel = ARRIVAL_STATUSES.has(booking.status)
+    ? 'Mark Arrived'
+    : showEnRoute
+      ? "I'm on the way"
       : showStart
         ? 'Start Job'
-        : booking.status === 'arrived'
-          ? 'Capture Selfie to Start'
-          : 'Complete Job';
+        : showComplete
+          ? 'Complete Job'
+          : 'Mark Arrived';
 
   function handlePrimaryAction() {
-    if (showEnRoute) handleMarkEnRoute();
-    else if (showArrive) handleMarkArrived();
+    // Prefer Arrived when already travelling; otherwise On the way, then Start OTP.
+    if (ARRIVAL_STATUSES.has(booking.status)) handleMarkArrived();
+    else if (showEnRoute) handleMarkEnRoute();
     else if (showStart) setOtpMode('start');
-    else if (isArrived) handleMarkArrived();
+    else if (showArrive) handleMarkArrived();
     else if (showComplete) {
       // The backend rejects completion until estimates are settled and photographed,
       // so surface the remaining step here instead of a failed request.
@@ -419,6 +444,34 @@ export default function JobDetailScreen() {
       </LinearGradient>
 
       <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
+        {showActivate && (
+          <View style={styles.activateBanner}>
+            <Text style={styles.activateTitle}>Not your active job</Text>
+            <Text style={styles.activateHint}>
+              You have another job in focus. Switch to this one to work it first (e.g. later slot
+              before an earlier one).
+            </Text>
+            <TouchableOpacity
+              style={[styles.activateBtn, actionLoading && { opacity: 0.6 }]}
+              onPress={handleActivate}
+              disabled={actionLoading}
+            >
+              {actionLoading ? (
+                <ActivityIndicator color={colors.black} />
+              ) : (
+                <Text style={styles.activateBtnText}>Work on this job first</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {booking.isActiveJob && !isCompleted && !isCancelled && (
+          <View style={styles.activeBanner}>
+            <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+            <Text style={styles.activeBannerText}>Working on this job now</Text>
+          </View>
+        )}
+
         {/* Live job timer — starts the moment the expert starts the job */}
         {showComplete && effectiveStartedAt && (
           <JobTimer startedAt={effectiveStartedAt} durationMin={booking.jobTimer?.durationMin} />
@@ -584,25 +637,51 @@ export default function JobDetailScreen() {
       </ScrollView>
 
       {/* Action bar */}
-      {(showEnRoute || showArrive || showStart || showComplete || booking.status === 'arrived') && (
+      {(showActivate ||
+        showEnRoute ||
+        showArrive ||
+        showStart ||
+        showComplete ||
+        booking.status === 'arrived') && (
         <View style={styles.actionBar}>
-          {showComplete && (
-            <TouchableOpacity
-              style={styles.addonBtn}
-              onPress={openAddonPicker}
+          {showActivate ? (
+            <GradientButton
+              title="Work on this job first"
+              onPress={handleActivate}
+              loading={actionLoading}
               disabled={actionLoading}
-            >
-              <Ionicons name="add-circle-outline" size={18} color={colors.black} />
-              <Text style={styles.addonBtnText}>Suggest Add-on</Text>
-            </TouchableOpacity>
+              style={styles.primaryAction}
+            />
+          ) : (
+            <>
+              {showComplete && (
+                <TouchableOpacity
+                  style={styles.addonBtn}
+                  onPress={openAddonPicker}
+                  disabled={actionLoading}
+                >
+                  <Ionicons name="add-circle-outline" size={18} color={colors.black} />
+                  <Text style={styles.addonBtnText}>Suggest Add-on</Text>
+                </TouchableOpacity>
+              )}
+              {showEnRoute && showArrive && EN_ROUTE_STATUSES.has(booking.status) && (
+                <TouchableOpacity
+                  style={styles.addonBtn}
+                  onPress={handleMarkArrived}
+                  disabled={actionLoading}
+                >
+                  <Text style={styles.addonBtnText}>I've arrived</Text>
+                </TouchableOpacity>
+              )}
+              <GradientButton
+                title={primaryActionLabel}
+                onPress={handlePrimaryAction}
+                loading={actionLoading}
+                disabled={actionLoading}
+                style={styles.primaryAction}
+              />
+            </>
           )}
-          <GradientButton
-            title={primaryActionLabel}
-            onPress={handlePrimaryAction}
-            loading={actionLoading}
-            disabled={actionLoading}
-            style={styles.primaryAction}
-          />
         </View>
       )}
 
@@ -842,6 +921,48 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     textDecorationLine: 'underline',
+  },
+  activateBanner: {
+    backgroundColor: '#EFF6FF',
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  activateTitle: {
+    fontWeight: '800',
+    fontSize: 14,
+    color: colors.black,
+  },
+  activateHint: {
+    marginTop: 4,
+    fontSize: 12,
+    color: colors.gray,
+    lineHeight: 17,
+  },
+  activateBtn: {
+    marginTop: spacing.sm,
+    backgroundColor: colors.yellow,
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+  },
+  activateBtnText: {
+    fontWeight: '800',
+    color: colors.black,
+    fontSize: 14,
+  },
+  activeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: spacing.sm,
+  },
+  activeBannerText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.success,
   },
   actionBar: {
     flexDirection: 'row',

@@ -106,13 +106,18 @@ export default function JobsScreen() {
           }
           renderItem={({ item }) => (
             <TouchableOpacity
-              style={[common.card, styles.card]}
+              style={[common.card, styles.card, item.isActiveJob && styles.activeCard]}
               onPress={() => router.push(`/job/${item.id}`)}
             >
               <View style={common.between}>
                 <Text style={styles.serviceName} numberOfLines={1}>{item.serviceName}</Text>
                 <StatusBadge status={item.status} />
               </View>
+              {item.isActiveJob ? (
+                <Text style={styles.activeLabel}>Working on this now</Text>
+              ) : item.canActivate ? (
+                <Text style={styles.switchHint}>Tap to open · switch to this job inside</Text>
+              ) : null}
               <Text style={styles.customerName}>{item.customerName}</Text>
               <View style={[common.between, { marginTop: spacing.xs }]}>
                 <Text style={styles.date}>{formatDateTime(item.scheduledAt)}</Text>
@@ -141,6 +146,22 @@ const styles = StyleSheet.create({
   },
   card: {
     marginBottom: spacing.sm,
+  },
+  activeCard: {
+    borderWidth: 2,
+    borderColor: colors.yellow,
+  },
+  activeLabel: {
+    marginTop: 4,
+    fontSize: 12,
+    fontWeight: '800',
+    color: colors.black,
+  },
+  switchHint: {
+    marginTop: 4,
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.info,
   },
   serviceName: {
     fontWeight: '800',

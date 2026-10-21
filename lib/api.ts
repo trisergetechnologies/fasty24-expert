@@ -147,6 +147,10 @@ export interface BookingSummary {
   status: BookingStatus;
   totalAmount: number;
   expertEarning: number;
+  /** True when this is the expert's current focus job. */
+  isActiveJob?: boolean;
+  /** True when expert can switch focus to this job (assigned/travelling/arrived, not active). */
+  canActivate?: boolean;
 }
 
 export type BookingStatus =
@@ -539,6 +543,11 @@ export function requestBookingCall(id: string) {
     `/bookings/${id}/call`,
     { method: 'POST' },
   );
+}
+
+/** Switch focus to this job when the expert has multiple assigned bookings. */
+export function activateJob(id: string) {
+  return request<BookingDetail>(`/bookings/${id}/activate`, { method: 'POST' });
 }
 
 export function markEnRoute(id: string) {

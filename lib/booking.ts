@@ -80,6 +80,8 @@ export function normalizeBookingSummary(raw: RawBooking): BookingSummary {
     status: mapBookingStatus(raw),
     totalAmount: resolveTotalAmount(raw),
     expertEarning: resolveExpertEarning(raw),
+    isActiveJob: raw.isActiveJob === true,
+    canActivate: raw.canActivate === true,
   };
 }
 
@@ -129,6 +131,8 @@ export function normalizeBookingDetail(raw: RawBooking): BookingDetail {
     categorySlugs: Array.isArray(raw.categorySlugs) ? raw.categorySlugs.map(String) : [],
     serviceSlug: raw.serviceSlug ? String(raw.serviceSlug) : undefined,
     rateCard: raw.rateCard && typeof raw.rateCard === 'object' ? raw.rateCard : undefined,
+    isActiveJob: raw.isActiveJob === true,
+    canActivate: raw.canActivate === true,
   };
 }
 
