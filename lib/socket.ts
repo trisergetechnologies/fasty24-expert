@@ -11,13 +11,19 @@ const SOCKET_URL =
 let socket: Socket | null = null;
 
 export async function connectSocket(): Promise<Socket> {
-  if (socket?.connected) return socket;
+  // Reuse the single instance even while temporarily disconnected — Socket.IO
+  // reconnects it internally, so building a new instance here would leak the old
+  // one and duplicate listeners. A fresh socket (with the current token) is only
+  // built after an explicit disconnectSocket() (logout / session expiry).
+  if (socket) return socket;
   const token = await getToken();
   socket = io(SOCKET_URL, {
     auth: { token },
     transports: ['websocket'],
-    reconnectionAttempts: 5,
+    reconnection: true,
+    reconnectionAttempts: Infinity,
     reconnectionDelay: 2000,
+    reconnectionDelayMax: 10000,
   });
   socket.on('connect_error', (err) => {
     console.warn('[socket] connect error', err.message);
@@ -49,14 +55,32 @@ export function onOffer(handler: (offer: Offer) => void) {
 
 // ─── Subscribe to booking status updates ─────────────────────────────────────
 
+/**
+ * Named realtime events the backend emits into the `booking:{publicId}` room.
+ * A few status-specific events carry only partial data, so we fold the implied
+ * status into the patch before handing it to the caller (mirrors the customer app).
+ */
+const BOOKING_PATCH_EVENTS: Record<string, { status?: string }> = {
+  'booking:update': {},
+  'booking:status': {},
+  'booking:assigned': { status: 'assigned' },
+  'booking:arrived': { status: 'arrived' },
+  'booking:en_route': { status: 'travelling' },
+};
+
 export function subscribeBooking(bookingId: string, handler: (data: unknown) => void) {
   socket?.emit('booking:subscribe', { bookingId });
-  socket?.emit('join:booking', bookingId);
-  socket?.on(`booking:${bookingId}`, handler);
+  const bound = Object.entries(BOOKING_PATCH_EVENTS).map(([event, implied]) => {
+    const fn = (data: unknown) => {
+      const payload = data && typeof data === 'object' ? (data as Record<string, unknown>) : {};
+      handler({ ...implied, ...payload });
+    };
+    socket?.on(event, fn);
+    return { event, fn };
+  });
   return () => {
     socket?.emit('booking:unsubscribe', { bookingId });
-    socket?.emit('leave:booking', bookingId);
-    socket?.off(`booking:${bookingId}`, handler);
+    bound.forEach(({ event, fn }) => socket?.off(event, fn));
   };
 }
 

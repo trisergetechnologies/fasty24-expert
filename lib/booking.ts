@@ -180,6 +180,20 @@ export function formatDateTime(value: string | null | undefined): string {
   return date.toLocaleString('en-IN');
 }
 
+/**
+ * Formats a calendar date. Date-only strings (YYYY-MM-DD) are parsed as local
+ * time so they don't render as "05:30" IST or roll back to the previous day.
+ */
+export function formatDate(value: string | null | undefined): string {
+  if (!value) return '—';
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  const date = match
+    ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+    : new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
 export function mergeBookingDetail(
   prev: BookingDetail | null,
   patch: RawBooking | null | undefined,

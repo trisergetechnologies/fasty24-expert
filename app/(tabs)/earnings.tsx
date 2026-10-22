@@ -25,7 +25,7 @@ import {
   requestWithdrawal,
 } from '../../lib/api';
 import type { EarningsSummary, ExpertWallet, WalletTransaction } from '../../lib/api';
-import { formatInr, formatDateTime } from '../../lib/booking';
+import { formatInr, formatDateTime, formatDate } from '../../lib/booking';
 import SegmentedControl from '../../components/SegmentedControl';
 import { colors, spacing, radius, shadows, common, gradients } from '../../constants/theme';
 
@@ -55,17 +55,27 @@ export default function EarningsScreen() {
   const load = useCallback(async (nextPeriod: Period, { silent = false }: { silent?: boolean } = {}) => {
     if (!silent) setLoading(true);
     try {
-      const [earningsRes, walletRes, txRes] = await Promise.all([
+      // Settle independently so a failure in one section (e.g. earnings) doesn't
+      // hide the others (e.g. the wallet balance / withdraw button).
+      const [earningsRes, walletRes, txRes] = await Promise.allSettled([
         getEarnings(nextPeriod),
         getWallet(),
         getWalletTransactions(40),
       ]);
-      setData(earningsRes);
-      setWallet(walletRes);
-      setTransactions(txRes.transactions || []);
-      setError(null);
-    } catch (err: any) {
-      setError(err?.message ?? 'Could not load earnings.');
+      if (earningsRes.status === 'fulfilled') setData(earningsRes.value);
+      if (walletRes.status === 'fulfilled') setWallet(walletRes.value);
+      if (txRes.status === 'fulfilled') setTransactions(txRes.value.transactions || []);
+
+      if (
+        earningsRes.status === 'rejected' &&
+        walletRes.status === 'rejected' &&
+        txRes.status === 'rejected'
+      ) {
+        const reason: any = earningsRes.reason;
+        setError(reason?.message ?? 'Could not load earnings.');
+      } else {
+        setError(null);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -242,7 +252,7 @@ export default function EarningsScreen() {
               breakdown.map((item) => (
                 <View key={item.date} style={[common.card, styles.breakdownRow]}>
                   <View style={common.between}>
-                    <Text style={styles.breakdownDate}>{formatDateTime(item.date)}</Text>
+                    <Text style={styles.breakdownDate}>{formatDate(item.date)}</Text>
                     <Text style={styles.breakdownAmount}>₹{formatInr(item.amount)}</Text>
                   </View>
                   <Text style={styles.breakdownJobs}>

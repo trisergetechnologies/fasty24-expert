@@ -83,7 +83,18 @@ export default function JobDetailScreen() {
       setBooking(normalizeBookingDetail(raw as any));
       setError(null);
     } catch (err: any) {
-      setError(err?.message ?? 'Could not load this job.');
+      // The backend returns a raw code ("not_found") when the booking is no
+      // longer assigned to this expert — e.g. the offer was taken by someone
+      // else, expired, or the job was reassigned. Show a human message instead
+      // of the raw key so the screen isn't a confusing dead-end.
+      const code = String(err?.message ?? '');
+      const friendly =
+        code === 'not_found'
+          ? 'This job is no longer assigned to you. It may have been taken by another expert or reassigned.'
+          : code === 'already_assigned'
+            ? 'This job has already been accepted by another expert.'
+            : code || 'Could not load this job.';
+      setError(friendly);
     } finally {
       setLoading(false);
     }
@@ -107,9 +118,35 @@ export default function JobDetailScreen() {
     if (!id) return;
     const unsubscribe = subscribeBooking(id, (patch) => {
       setBooking((prev) => mergeBookingDetail(prev, patch as any));
+      // Status-changing events carry partial data; refetch the authoritative
+      // booking so fields like session OTP codes and timeline are complete.
+      const nextStatus = (patch as any)?.status;
+      if (
+        nextStatus === 'assigned' ||
+        nextStatus === 'travelling' ||
+        nextStatus === 'arrived' ||
+        nextStatus === 'in_progress' ||
+        nextStatus === 'completed' ||
+        nextStatus === 'cancelled'
+      ) {
+        void load();
+      }
     });
     return unsubscribe;
-  }, [id]);
+  }, [id, load]);
+
+  // Polling fallback: realtime events can be missed on a flaky connection, so
+  // keep active jobs fresh while the screen is open (mirrors the customer app).
+  useEffect(() => {
+    if (!id) return undefined;
+    const raw = booking?.backendStatus || booking?.status || '';
+    const isActive = ['assigned', 'travelling', 'arrived', 'in_progress'].includes(raw);
+    if (!isActive) return undefined;
+    const interval = setInterval(() => {
+      void load();
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [id, booking?.backendStatus, booking?.status, load]);
 
   useEffect(() => {
     if (!id) return undefined;
@@ -361,8 +398,11 @@ export default function JobDetailScreen() {
         <TouchableOpacity style={styles.retryBtn} onPress={() => { setLoading(true); load(); }}>
           <Text style={styles.retryBtnText}>Retry</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.backLink} onPress={() => router.back()}>
-          <Text style={styles.backLinkText}>Go back</Text>
+        <TouchableOpacity
+          style={styles.backLink}
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/jobs'))}
+        >
+          <Text style={styles.backLinkText}>Go to my jobs</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );

@@ -112,8 +112,22 @@ export function OfferProvider({ children }: { children: ReactNode }) {
     async function startSession() {
       const token = await getToken();
       if (!token || cancelled) return;
-      await connectSocket();
+      const socket = await connectSocket();
       if (cancelled) return;
+      // Wait for the socket to actually connect before binding/hydrating so we
+      // don't miss offers emitted during the connect window. Falls back after a
+      // short timeout so a slow connect never blocks offer polling.
+      if (!socket.connected) {
+        await new Promise<void>((resolve) => {
+          const done = () => {
+            socket.off('connect', done);
+            resolve();
+          };
+          socket.once('connect', done);
+          setTimeout(done, 4000);
+        });
+        if (cancelled) return;
+      }
       unsubOffer?.();
       unsubOffer = onOffer((o) => ingestOffer(o));
       await hydratePending();
@@ -131,11 +145,19 @@ export function OfferProvider({ children }: { children: ReactNode }) {
       }
     });
 
+    // Safety net: a dropped socket event or push can leave an offer unseen, so
+    // poll the backend for pending offers while the expert is online and idle.
+    const poll = setInterval(() => {
+      if (getPresenceMode() !== 'online') return;
+      void hydratePending();
+    }, 20000);
+
     return () => {
       cancelled = true;
       unsubOffer?.();
       unbindResume();
       sub.remove();
+      clearInterval(poll);
       clearExpiry();
     };
   }, [ingestOffer, hydratePending, clearExpiry]);

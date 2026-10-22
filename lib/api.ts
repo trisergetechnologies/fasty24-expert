@@ -1,5 +1,7 @@
 import Constants from 'expo-constants';
-import { getToken } from './storage';
+import { router } from 'expo-router';
+import { getToken, clearAll } from './storage';
+import { disconnectSocket } from './socket';
 
 const BASE =
   process.env.EXPO_PUBLIC_API_URL ??
@@ -344,6 +346,27 @@ export class ApiError extends Error {
 
 // ─── Core fetch ───────────────────────────────────────────────────────────────
 
+// Centralised session-expiry handling: an authenticated request returning 401
+// means the stored token is stale, so sign the expert out, drop realtime, and
+// send them to the login screen. Guarded so simultaneous 401s don't loop.
+let unauthorizedHandled = false;
+async function handleUnauthorized() {
+  if (unauthorizedHandled) return;
+  unauthorizedHandled = true;
+  try {
+    disconnectSocket();
+  } catch {}
+  try {
+    await clearAll();
+  } catch {}
+  try {
+    router.replace('/login');
+  } catch {}
+  setTimeout(() => {
+    unauthorizedHandled = false;
+  }, 1500);
+}
+
 async function request<T>(
   path: string,
   opts: RequestInit = {},
@@ -353,12 +376,19 @@ async function request<T>(
     'Content-Type': 'application/json',
     ...(opts.headers as Record<string, string>),
   };
+  let sentToken = false;
   if (authenticated) {
     const token = await getToken();
-    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+      sentToken = true;
+    }
   }
   const res = await fetch(`${BASE}${path}`, { ...opts, headers });
   if (!res.ok) {
+    if (res.status === 401 && sentToken) {
+      void handleUnauthorized();
+    }
     let msg = res.statusText;
     try {
       const body = await res.json();
